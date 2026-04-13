@@ -1,0 +1,2507 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>MaterialAnzeige</title>
+<style>
+/* Grundlayout / Farben (pergament / braun) */
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+  background: #f7efe0;
+  color: #4b3f2f;
+  padding: 12px;
+}
+.wrapper { max-width: 980px; margin: 0 auto; }
+
+/* Suchfeld */
+input[type="text"]{
+  width:100%;
+  padding:8px;
+  margin:6px 0 12px 0;
+  border-radius:6px;
+  border:1px solid #d7c4a3;
+  background:#fff8f0;
+  box-sizing:border-box;
+  font-size:1rem;
+}
+input[type="text"]:focus{
+  outline:none;
+  border:2px solid #a57c52;  /* brauner Rahmen beim Fokus */
+  padding:7px;               /* kompensiert die Border so die Größe gleich bleibt */
+  box-sizing:border-box;
+}
+
+/* Erweiterungs-Checkboxen */
+.checkbox-group { margin-bottom:12px; }
+.checkbox-group-name { font-weight:600; color:#5d4037; margin-bottom:6px; }
+.checkbox-inline {
+  display:inline-block;
+  margin-right:8px;
+  padding:4px 6px;
+  border-radius:6px;
+  background:#fbf4e6;
+  cursor:pointer;
+  color:#4b3f2f;
+}
+.checkbox-inline input[type="checkbox"] { accent-color:#a57c52; margin-right:6px; }
+
+/* Tabelle */
+table {
+  width:100%;
+  border-collapse:separate;
+  border-spacing:0;
+  background:#fff8f0;
+  border:2px solid #a57c52;
+  border-radius:8px 8px 0 0;
+  overflow:scroll;
+  display:block;
+}
+thead th {
+  position:sticky;
+  top:0;
+  background:#a57c52;
+  color:white;
+  padding:10px 12px;
+  text-align:center;
+  font-weight:600;
+  border-bottom:2px solid #a57c52;
+}
+thead th:first-child {
+  cursor: pointer;
+}
+tbody td, thead th { padding:8px 12px; border-bottom:1px solid #e8dcc1; text-align:center; } 
+tbody td:first-child, thead th:first-child { text-align:left; width:100%; }
+tbody td.distinct::after { content:"*"; }
+tbody td.distinct::before { content:"*"; color:transparent; }
+tbody tr:nth-child(even) { background:#fbf3e9; }
+#material-table tbody tr:hover { background:#f0e0c8; } /* gesamte Zeile beim Hover */
+.category { font-weight:700; cursor:pointer; }
+.item-row { }
+
+#overlay {
+  display:none;
+  position:fixed;
+  inset:0;
+  background:rgba(75,63,47,0.45);
+  justify-content:center;
+  align-items:center;
+  z-index:9999;
+}
+#overlay-content {
+  background:#fff8f0;
+  padding:18px;
+  border-radius:10px;
+  width:min(680px,95%);
+  max-height:90%;
+  overflow:auto;
+  position:relative;
+  box-shadow:0 8px 28px rgba(75,63,47,0.25);
+}
+#overlay-close { position:absolute; top:10px; right:10px; background:none; border:0; font-size:18px; color:#5d4037; cursor:pointer; }
+#overlay img { max-width:100%; height:30vh; max-height:60vw; display:block; margin:8px auto; border-radius:6px; padding:0, .5em; box-sizing:border-box; }
+.nav-btn { position:absolute; top:50%; transform:translateY(-50%); background:none; border:0; font-size:24px; cursor:pointer; color:#a57c52; }
+.nav-left { left:12px; } .nav-right { right:12px; }
+#overlay table { width:100%; margin-top:10px; border:1px solid #e5d7b7; border-radius:6px; overflow:hidden; }
+#overlay table th { background:#e0cfa1; color:#4b3f2f; padding:6px 8px; text-align:left; }
+#overlay table td { background:#fdf1dc; padding:6px 8px; }
+</style>
+</head>
+<body>
+<div class="wrapper">
+  <div id="expansions"></div>
+  <input id="search" type="text" placeholder="Suche ..." />
+  <table id="material-table" role="table" aria-label="Materialkatalog">
+    <thead><tr id="table-head-row"></tr></thead>
+    <tbody id="material-body"></tbody>
+  </table>
+</div>
+
+<!-- Overlay für Einzelteil -->
+<div id="overlay">
+  <div id="overlay-content">
+    <button id="overlay-close">✖</button>
+    <div id="overlay-path" style="color:#5d4037; font-size:0.95rem; margin-bottom:4px;"></div>
+    <h2 id="overlay-name" style="margin:4px 0;"></h2>
+    <div id="overlay-alt" style="margin-bottom:8px; color:#4b3f2f;"></div>
+
+    <div style="position:relative;">
+      <button class="nav-btn nav-left">◀</button>
+      <img id="overlay-img" src="" alt="">
+      <button class="nav-btn nav-right">▶</button>
+      <div id="overlay-caption" style="text-align:center; color:#5d4037; margin-top:6px;"></div>
+    </div>
+
+    <table id="overlay-props" style="margin-top:10px;"></table>
+  </div>
+</div>
+
+<script>
+// ==================== Daten ====================
+const expansions = [
+  { id: "dlva", group: "große Box", code: "DLvA", name: "Die Legenden von Andor", year: 2012 },
+  { id: "dridn", group: "große Box", code: "DRidN", name: "Die Reise in den Norden", year: 2014 },
+  { id: "dlh", group: "große Box", code: "DlH", name: "Die letzte Hoffnung", year: 2016 },
+  { id: "dek", group: "große Box", code: "DeK", name: "Die ewige Kälte", year: 2022 },
+  { id: "dfl", group: "große Box", code: "DfL", name: "Das ferne Land", year: 2025 },
+  { id: "stsch", group: "kleine Box", code: "StSch", name: "Der Sternenschild", year: 2013 },
+  { id: "bb", group: "kleine Box", code: "BB", name: "Die Bonus-Box", year: 2017 },
+  { id: "ag", group: "kleine Box", code: "AG", name: "Die Verschollenen Legenden – Alte Geister", year: 2018 },
+  { id: "dz", group: "kleine Box", code: "DZ", name: "Die Verschollenen Legenden – Düstere Zeiten", year: 2020 },
+  { id: "nh", group: "Helden-Box", code: "NH", name: "Neue Helden", year: 2014 },
+  { id: "dh", group: "Helden-Box", code: "DH", name: "Dunkle Helden", year: 2017 },
+  { id: "mh", group: "Helden-Box", code: "MH", name: "Magische Helden", year: 2021 },
+  { id: "aj", group: "Junior-Box", code: "AJ", name: "Andor Junior", year: 2020 },
+  { id: "gads", group: "Junior-Box", code: "AJGadS", name: "Andor Junior – Die Gefahr aus dem Schatten", year: 2022 },
+  { id: "ldk", group: "sonstige Box", code: "LdK", name: "Das Lied des Königs", year: 2015 },
+  { id: "cut", group: "sonstige Box", code: "CuT", name: "Chada & Thorn", year: 2015 },
+  { id: "bdr", group: "sonstige Box", code: "BdR", name: "Die Befreiung der Rietburg", year: 2019 },
+  { id: "sqdp", group: "sonstige Box", code: "SQDP", name: "Story Quest – Dunkle Pfade", year: 2021 },
+  { id: "ve", group: "sonstige Box", code: "VE", name: "Varkurs Erwachen", year: 2022 },
+  { id: "bibo", group: "sonstige Box", code: "BiBo", name: "Big Box", year: 2024 },
+  { id: "fva", group: "sonstiges Material", code: "FvA", name: "Die Feinde von Andor", year: 2017 },
+  { id: "kda", group: "sonstiges Material", code: "KdA", name: "Die Kreaturen des Ava", year: 2023 },
+  { id: "tdfl", group: "sonstiges Material", code: "TdfL", name: "Die Trolle des Fernen Landes", year: 2026 },
+  { id: "bm", group: "sonstiges Material", code: "BM", name: "Bonus-Material", year: Number.MAX_VALUE },
+  { id: "bmaj", group: "sonstiges Material", code: "BMAJ", name: "Bonus-Material (Andor Junior)", year: Number.MAX_VALUE },
+  { id: "aoh", group: "App", code: "AoH", name: "Adventures of Hadria", year: 2017 },
+  { id: "gdk", group: "App", code: "GdK", name: "Das Geheimnis des Königs", year: 2019 },
+  { id: "hae", group: "App", code: "HaE", name: "Herz aus Eis", year: 2023 },
+  { id: "adh", group: "Fan-Erweiterung", code: "AdH", name: "Ära der Händler", year: 2014 },
+];
+const codeMap = Object.fromEntries(expansions.map(exp => [exp.code, exp.code]));
+codeMap.AdH = "ÄdH";
+codeMap.AJGadS = "AJ GadS";
+codeMap.BMAJ = "BM AJ";
+codeMap.CuT = "C&T";
+codeMap.SQDP = "SQ DP";
+
+function inflectColor (color, suffix) {
+  if (["rosa"].includes(color)) {
+    return color + " ";
+  }
+  return color + (color.endsWith("e") ? "" : "e") + suffix + " ";
+}
+
+function removeUmlauts (name) {
+  name = name.replaceAll("ä", "ae").replaceAll("ö", "oe").replaceAll("ü", "ue").replaceAll("ß", "ss");
+  name = name.replaceAll(" ", "_").replaceAll("/", "_").replaceAll("„", "").replaceAll("“", "").replaceAll("(", "").replaceAll(")", "").replaceAll(".", "").replaceAll(":", "").replaceAll(",", "").replaceAll("+", "").replaceAll("'", "").replaceAll(" – ", " ");
+  return name;
+}
+
+/*
+400% Zoom
+https://www.remove.bg/
+https://www.imagetools.org/trim
+*/
+
+function customItem (args, customArgs) {
+    const item = {
+    id: "",
+    name: "",
+    alt: [],
+    counts: {},
+    images: {},
+    properties: {},
+  }
+  Object.keys(item).forEach(key => {
+    if (key !== "images") {
+      if (customArgs.hasOwnProperty(key)) {
+        item[key] = customArgs[key];
+      }
+      if (args.hasOwnProperty(key)) {
+        item[key] = args[key];
+      }
+    }
+  });
+  Object.keys(item.counts).forEach(key => {
+    item.images[key] = { src: noImage, caption: item.name, };
+    if (customArgs.hasOwnProperty("images") && customArgs.images.hasOwnProperty(key)) {
+      Object.keys(customArgs.images[key]).forEach(k => {
+        item.images[key][k] = customArgs.images[key][k];
+      });
+    }
+    if (args.hasOwnProperty("images") && args.images.hasOwnProperty(key)) {
+      Object.keys(args.images[key]).forEach(k => {
+        item.images[key][k] = args.images[key][k];
+      });
+    }
+  });
+  return item;
+}
+
+function itemDefault (args) {
+  const customArgs = {
+    id: removeUmlauts(args.name).toLowerCase(),
+    images: Object.fromEntries(Object.keys(args.counts).map(key => [key, { src: "Bilder/" + removeUmlauts(args.name) + ".png", caption: args.name }])),
+  };
+  return customItem(args, customArgs);
+}
+
+function itemAdventureCard (args, number, subname) {
+  const customArgs = {
+    id: "abenteuer_" + number.toString() + "_" + removeUmlauts(subname).toLowerCase(),
+    name: "Abenteuer " + number.toString() + " („" + subname + "“)",
+    images: Object.fromEntries(Object.keys(args.counts).map(key => [key, { src: noImage, caption: "Abenteuerkarte" }])),
+  };
+  return customItem(args, customArgs);
+}
+
+function itemBonusAdventureCard (args, subname) {
+  const customArgs = {
+    id: "bonusabenteuer_" + removeUmlauts(subname).toLowerCase(),
+    name: "Bonus-Abenteuer („" + subname + "“)",
+    images: Object.fromEntries(Object.keys(args.counts).map(key => [key, { src: noImage, caption: "Abenteuerkarte" }])),
+  };
+  return customItem(args, customArgs);
+}
+
+function itemBonusLegendCard (args, subname) {
+  const customArgs = {
+    id: "bonuslegende_" + removeUmlauts(subname).toLowerCase(),
+    name: "Bonus-Legende („" + subname + "“)",
+    images: Object.fromEntries(Object.keys(args.counts).map(key => [key, { src: noImage, caption: "Legendenkarte" }])),
+  };
+  return customItem(args, customArgs);
+}
+
+function itemBootyToken (args, subname) {
+  const customArgs = {
+    id: "beuteplaettchen_" + removeUmlauts(subname).toLowerCase(),
+    name: "Beuteplättchen („" + subname + "“)",
+    alt: ["Beutekarte („" + subname + "“)"],
+    images: Object.fromEntries(Object.keys(args.counts).map(key => [key, { src: "Bilder/Beutekarte_" + removeUmlauts(subname) + ".png", caption: "Beutekarte („" + subname + "“)" }])),
+  };
+  return customItem(args, customArgs);
+}
+
+function itemCaveToken (args, subname) {
+  return itemFogTokenTemplate(args, "Höhlenplättchen", subname);
+}
+
+function itemDie (args, color) {
+  const customArgs = {
+    id: "wuerfel_" + removeUmlauts(color).toLowerCase(),
+    name: inflectColor(color, "r") + "Würfel",
+  };
+  return customItem(args, customArgs);
+}
+
+function itemDwarfDoor (args, subname, number) {
+  const customArgs = {
+    id: "zwergentuer_" + removeUmlauts(subname).toLowerCase() + "_" + number.toString(),
+    name: "Zwergentür „" + subname + "“ (" + number.toString() + ")",
+    images: Object.fromEntries(Object.keys(args.counts).map(key => [key, { src: "Bilder/Zwergentuer_" + removeUmlauts(subname) + "_" + number.toString() + ".png", caption: "Zwergentür " + subname }])),
+  };
+  return customItem(args, customArgs);
+}
+
+function itemFogToken (args, subname) {
+  return itemFogTokenTemplate(args, "Nebelplättchen", subname);
+}
+
+function itemFogTokenTemplate (args, supname, subname) {
+  const customArgs = {
+    id: removeUmlauts(supname + "_" + subname).toLowerCase(),
+    name: supname + " „" + subname + "“",
+    images: Object.fromEntries(Object.keys(args.counts).map(key => [key, { src: "Bilder/" + removeUmlauts(supname + "_" + subname) + ".png", caption: supname + " „" + subname + "“", }])),
+  };
+  return customItem(args, customArgs)
+}
+
+function itemHeroBoard (args, subname) {
+  const customArgs = {
+    id: "heldentafel_" + removeUmlauts(subname.split("/")[0]).toLowerCase(),
+    name: "Heldentafel „" + subname + "“",
+    images: Object.fromEntries(Object.keys(args.counts).map(key => [key, { src: "Bilder/Heldentafel_" + removeUmlauts(subname.split("/")[0]) + ".jpg", caption: "Heldentafel" }])),
+  };
+  return  customItem(args, customArgs);
+}
+
+function itemHeroCrest (args, color) {
+  const customArgs = {
+    id: "heldenwappen_" + removeUmlauts(color).toLowerCase(),
+    name: inflectColor(color, "s") + "Heldenwappen",
+    alt: [inflectColor(color, "s") + "Wappenplättchen"],
+    images: Object.fromEntries(Object.keys(args.counts).map(key => [key, { src: "Bilder/Heldenwappen_" + removeUmlauts(color) + ".png", caption: "Wappenplättchen" }])),
+  };
+  return customItem(args, customArgs);
+}
+
+function itemIceToken (args, subname) {
+  return itemFogTokenTemplate(args, "Eisplättchen", subname);
+}
+
+function itemLargeToken (args, subname, subsubname = "") {
+  const customArgs = {
+    id: "grosses_plaettchen_" + removeUmlauts(subname).toLowerCase() + (subsubname == "" ? "" : removeUmlauts(subsubname)).toLowerCase(),
+    name: "großes Plättchen „" + subname + "“" + (subsubname == "" ? "" : " („" + subsubname + "“)"),
+    images: Object.fromEntries(Object.keys(args.counts).map(key => [key, { src: "Bilder/grosse_Plaettchen.png", caption: "große Plättchen" }])),
+  };
+  return customItem(args, customArgs);
+}
+
+function itemLegendCard (args, number, subname) {
+  const customArgs = {
+    id: "legende_" + number.toString() + "_" + removeUmlauts(subname).toLowerCase(),
+    name: "Legende " + number.toString() + " („" + subname + "“)",
+    images: Object.fromEntries(Object.keys(args.counts).map(key => [key, { src: noImage, caption: "Legendenkarte" }])),
+  };
+  return customItem(args, customArgs);
+}
+
+function itemMineToken (args, subname) {
+  return itemFogTokenTemplate(args, "Minenplättchen", subname);
+}
+
+function itemMysticToken (args, subname) {
+  return itemFogTokenTemplate(args, "Mystikplättchen", subname);
+}
+
+function itemPlasticHolder (args, color) {
+  const customArgs = {
+    id: "kunststoffhalter_" + removeUmlauts(color.split("/").shift()).toLowerCase(),
+    name: inflectColor(color, "r") + "Kunststoffhalter",
+    alt: [inflectColor(color, "r") + "Standfuß"],
+  };
+  return customItem(args, customArgs);
+}
+
+function itemSnowToken (args, subname) {
+  return itemFogTokenTemplate(args, "Schneeplättchen", subname);
+}
+
+function itemTaskToken (args, subname) {
+  return itemFogTokenTemplate(args, "Aufgabenplättchen", subname);
+}
+
+function itemWoodenCube (args, color) {
+  const customArgs = {
+    id: "holzstein_" + removeUmlauts(color).toLowerCase(),
+    name: inflectColor(color, "r") + "Holzstein",
+    alt: [inflectColor(color, "r") + "Stärkemarker"],
+  };
+  return customItem(args, customArgs);
+}
+
+function itemWoodenDisk (args, color) {
+  const customArgs = {
+    id: "holzscheibe_" + removeUmlauts(color).toLowerCase(),
+    name: inflectColor(color, "") + "Holzscheibe",
+    alt: [inflectColor(color, "r") + "Willenspunktemarker", inflectColor(color, "r") + "Zeitstein"],
+  };
+  return customItem(args, customArgs);
+}
+
+const noImage = "Bilder/_kein_Bild.png";
+
+const nestedItems = {
+  "Figur" : {
+    "Holzfigur" : [
+      itemDefault({ name: "Barde", counts: { DRidN: 1 } }),
+      itemDefault({ name: "Erzähler", counts: { AoH: 1, BiBo:1, DeK: 1, DfL: 1, DlH: 1, DLvA: 1, GdK: 1, HaE: 1 }, images: { AoH: { src: noImage }, DeK: { src: noImage }, DfL: { src: "Bilder/Erzaehler_DfL.png" }, DlH: { src: "Bilder/Erzaehler_DlH.png" }, GdK: { src: noImage }, HaE: { src: noImage } } }),
+      itemDefault({ name: "Schiff", alt: ["Aldebaran"], counts: { DRidN: 1 } }),
+    ],
+    "Kunststoffhalterfigur" : {
+      "Held etc." : {
+        "Dunkles Spiegelbild" : [
+            itemDefault({ name: "Dunkles Spiegelbild Eis-Dämon", counts: { BM: 1 } }),
+            itemDefault({ name: "Dunkles Spiegelbild Runenmeisterin", counts: { BM: 1 } }),
+            itemDefault({ name: "Dunkles Spiegelbild Steppennomade", counts: { BM: 1 } }),
+            itemDefault({ name: "Dunkles Spiegelbild Takuri-Hüterin", counts: { BM: 1 } }),
+        ],
+        "Held" : {
+          "Bergkrieger/Bergkriegerin" : [
+            itemDefault({ name: "Bergkrieger", alt: ["Grent"], counts: { BM: 1, DfL: 1 }, images: { BM: { src: "Bilder/Bergkrieger_DeK.png" } } }),
+            itemDefault({ name: "Bergkriegerin", alt: ["Grea"], counts: { BM: 1, DfL: 1 }, images: { BM: { src: "Bilder/Bergkriegerin_DeK.png" } } }),
+          ],
+          "Beschwörer/Beschwörerin" : [
+            itemDefault({ name: "Beschwörer", alt: ["Darhen"], counts: { DH: 1 } }),
+            itemDefault({ name: "Beschwörerin", alt: ["Darh"], counts: { DH: 1 } }),
+          ],
+          "Bewahrer/Bewahrerin" : [
+            itemDefault({ name: "Bewahrer", alt: ["Arbon"], counts: { BiBo: 1, NH: 1 }, images: { BiBo: { src: "Bilder/Bewahrer_BiBo.png" } } }),
+            itemDefault({ name: "Bewahrerin", alt: ["Talvora"], counts: { BiBo: 1, NH: 1 }, images: { BiBo: { src: "Bilder/Bewahrerin_BiBo.png" } } }),
+          ],
+          "Bezwinger/Bezwingerin" : [
+            itemDefault({ name: "Bezwinger", alt: ["Teyan"], counts: { DfL: 1 }, images: { DfL: { caption: "Bezwinger des Feuers" } } }),
+            itemDefault({ name: "Bezwingerin", alt: ["Tenaya"], counts: { DfL: 1 }, images: { DfL: { caption: "Bezwingerin des Feuers" } } }),
+          ],
+          "Dunkler Magier/Dunkle Magierin" : [
+            itemDefault({ name: "Dunkler Magier", alt: ["Liphardus"], counts: { BM: 1 } }),
+            itemDefault({ name: "Dunkle Magierin", alt: ["Eara"], counts: { BM: 1 } }),
+          ],
+          "Bogenschütze/Bogenschützin" : [
+            itemDefault({ name: "Bogenschütze", alt: ["Pasco"], counts: { AJ: 1, BiBo: 1, DlH: 1, DLvA: 1, GdK: 1 }, images: { AJ: { src: noImage }, DlH: { src: "Bilder/Bogenschuetze_DlH.png" }, GdK: { src: noImage } } }),
+            itemDefault({ name: "Bogenschützin", alt: ["Chada"], counts: { AJ: 1, BdR: 1, BiBo: 1, CuT: 1, DlH: 1, DLvA: 1, GdK: 1 }, images: { AJ: { src: "Bilder/Bogenschuetzin_AJ.png" }, BdR: { src: "Bilder/Bogenschuetzin_BdR.png" }, CuT: { src: "Bilder/Bogenschuetzin_CuT.png" }, DlH: { src: "Bilder/Bogenschuetzin_DlH.png" }, GdK: { src: noImage } } }),
+          ],
+          "Eis-Dämon/Eis-Dämonin" : [
+            itemDefault({ name: "Eis-Dämon", alt: ["Ijsdur"], counts: { MH: 1 } }),
+            itemDefault({ name: "Eis-Dämonin", alt: ["Ijsdora"], counts: { MH: 1 } }),
+          ],
+          "Fährtenleser/Fährtenleserin" : [
+            itemDefault({ name: "Fährtenleser", alt: ["Fenn"], counts: { BiBo: 1, BMAJ: 1, NH: 1 }, images: { BiBo: { src: "Bilder/Faehrtenleser_BiBo.png" }, BMAJ: { src: "Bilder/Faehrtenleser_AJ.png" } } }),
+            itemDefault({ name: "Fährtenleserin", alt: ["Fennah"], counts: { BiBo: 1, BMAJ: 1, NH: 1 }, images: { BiBo: { src: "Bilder/Faehrtenleserin_BiBo.png" }, BMAJ: { src: "Bilder/Faehrtenleserin_AJ.png" } } }),
+          ],
+          "Feuerkrieger/Feuerkriegerin" : [
+            itemDefault({ name: "Feuerkrieger", alt: ["Trieest"], counts: { BM: 1, HaE: 1 }, images: { HaE: { src: noImage } } }),
+            itemDefault({ name: "Feuerkriegerin", alt: ["Taleena"], counts: { BM: 1, HaE: 1 }, images: { HaE: { src: noImage } } }),
+          ],
+          "Halbskral/Halbskralin" : [
+            itemDefault({ name: "Halbskral", alt: ["Forn"], counts: { DH: 1 } }),
+            itemDefault({ name: "Halbskralin", alt: ["Forr"], counts: { DH: 1 } }),
+          ],
+          "Hautwandler/Hautwandlerin" : [
+            itemDefault({ name: "Bär", alt: ["Drukil", "Drukia"], counts: { DH: 1 } }),
+            itemDefault({ name: "Hautwandler", alt: ["Drukil"], counts: { DH: 1 } }),
+            itemDefault({ name: "Hautwandlerin", alt: ["Drukia"], counts: { DH: 1 } }),
+          ],
+          "Heiler/Heilerin" : [
+            itemDefault({ name: "Heiler", alt: ["Avid"], counts: { DfL: 1 } }),
+            itemDefault({ name: "Heilerin", alt: ["Avida"], counts: { DfL: 1 } }),
+          ],
+          "Hüter/Hüterin" : [
+            itemDefault({ name: "Hüter", alt: ["Kheelan"], counts: { BiBo: 1, NH: 1 }, images: { BiBo: { src: "Bilder/Hueter_BiBo.png" } } }),
+            itemDefault({ name: "Hüterin", alt: ["Kheela"], counts: { BdR: 1, BiBo: 1, NH: 1 }, images: { BdR: { src: "Bilder/Hueterin_BdR.png" }, BiBo: { src: "Bilder/Hueterin_BiBo.png" } } }),
+          ],
+          "Juna" : [
+            itemDefault({ name: "Juna", counts: { BM: 1 } }),
+          ],
+          "Krieger/Kriegerin" : [
+            itemDefault({ name: "Krieger", alt: ["Thorn"], counts: { AJ: 1, BdR: 1, BiBo: 1, CuT: 1, DeK: 1, DlH: 1, DLvA: 1, GdK: 1, HaE: 1 }, images: { AJ: { src: "Bilder/Krieger_AJ.png" }, BdR: { src: "Bilder/Krieger_BdR.png" }, CuT: { src: "Bilder/Krieger_CuT.png" }, DeK: { src: noImage }, DlH: { src: "Bilder/Krieger_DlH.png" }, GdK: { src: noImage }, HaE: { src: noImage } } }),
+            itemDefault({ name: "Kriegerin", alt: ["Mairen"], counts: { AJ: 1, BiBo: 1, DeK: 1, DlH: 1, DLvA: 1, GdK: 1, HaE: 1 }, images: { AJ: { src: noImage }, DeK: { src: noImage }, DlH: { src: "Bilder/Kriegerin_DlH.png" }, GdK: { src: noImage }, HaE: { src: noImage } } }),
+          ],
+          "Naraven" : [
+            itemDefault({ name: "Naraven", alt: ["Alchemist"], counts: { BM: 1 } }),
+          ],
+          "Runenmeister/Runenmeisterin" : [
+            itemDefault({ name: "Runenmeister", alt: ["Ilar"], counts: { MH: 1 } }),
+            itemDefault({ name: "Runenmeisterin", alt: ["Iril"], counts: { MH: 1 } }),
+          ],
+          "Santa Gor" : [
+            itemDefault({ name: "Santa Gor", alt: ["Weihnachts-Gor"], counts: { BM: 1 } }),
+          ],
+          "Seekrieger/Seekriegerin" : [
+            itemDefault({ name: "Seekrieger", alt: ["Stinner"], counts: { CuT: 1, DRidN: 1 }, images: { CuT: { src: noImage } } }),
+            itemDefault({ name: "Seekriegerin", alt: ["Stianna"], counts: { DRidN: 1 } }),
+          ],
+          "Seher/Seherin" : [
+            itemDefault({ name: "Seher", alt: ["Leander"], counts: { DH: 1 } }),
+            itemDefault({ name: "Seherin", alt: ["Leane"], counts: { DH: 1 } }),
+          ],
+          "Steppennomade/Steppennomadin" : [
+            itemDefault({ name: "Steppennomade", alt: ["Barz"], counts: { MH: 1 } }),
+            itemDefault({ name: "Steppennomadin", alt: ["Yaza"], counts: { MH: 1 } }),
+          ],
+          "Steppenreiter/Steppenreiterin" : [
+            itemDefault({ name: "Steppenreiter", alt: ["Raash"], counts: { DfL: 1 } }),
+            itemDefault({ name: "Steppenreiterin", alt: ["Raashana"], counts: { DfL: 1 } }),
+          ],
+          "Takuri-Hüter/Takuri-Hüterin" : [
+            itemDefault({ name: "Takuri-Hüter", alt: ["Aćhan"], counts: { MH: 1 } }),
+            itemDefault({ name: "Takuri-Hüterin", alt: ["Aćh"], counts: { MH: 1 } }),
+          ],
+          "Tarus/Tare" : [
+            itemDefault({ name: "Tarus", alt: ["Bragor"], counts: { BiBo: 1, NH: 1 }, images: { BiBo: { src: "Bilder/Tarus_BiBo.png" } } }),
+            itemDefault({ name: "Tare", alt: ["Rhega"], counts: { BiBo: 1, NH: 1 }, images: { BiBo: { src: "Bilder/Tare_BiBo.png" } } }),
+          ],
+          "Wächter/Wächterin" : [
+            itemDefault({ name: "Wächter", alt: ["Feuerwächter", "Teyan"], counts: { AJGadS: 1, DeK: 1 }, images: { AJGadS: { src: "Bilder/Waechter_AJ.png", caption: "Feuerwächter" }, DeK: { src: noImage } } }),
+            itemDefault({ name: "Wächterin", alt: ["Feuerwächterin", "Tenaya"], counts: { AJGadS: 1, DeK: 1 }, images: { AJGadS: { src: "Bilder/Waechterin_AJ.png", caption: "Feuerwächterin" }, DeK: { src: noImage } } }),
+          ],
+          "Wassermagier/Wassermagierin" : [
+            itemDefault({ name: "Wassermagier", alt: ["Jarim"], counts: { BM: 1 } }),
+            itemDefault({ name: "Wassermagierin", alt: ["Jarid"], counts: { BM: 1 } }),
+          ],
+          "Wolfskrieger/Wolfskriegerin" : [
+            itemDefault({ name: "Wolfskrieger", alt: ["Orfen"], counts: { BB: 1, BM: 1, BdR: 1, BiBo: 1, GdK: 1 }, images: { BB: { src: noImage }, BdR: { src: "Bilder/Wolfskrieger_BdR.png" }, BiBo: { src: "Bilder/Wolfskrieger_BiBo.png" }, GdK: { src: noImage } } }),
+            itemDefault({ name: "Wolfskriegerin", alt: ["Marfa"], counts: { BB: 1, BiBo: 1, BM: 1, GdK: 1 }, images: { BB: { src: noImage }, BiBo: { src: "Bilder/Wolfskriegerin_BiBo.png" }, GdK: { src: noImage } } }),
+          ],
+          "Zauberer/Zauberin" : [
+            itemDefault({ name: "Zauberer", alt: ["Magier", "Liphardus"], counts: { AJ: 1, BiBo: 1, DeK: 1, DlH: 1, DLvA: 1, GdK: 1, HaE: 1 }, images: { AJ: { src: noImage, caption: "Magier" }, DeK: { src: noImage }, DlH: { src: "Bilder/Zauberer_DlH.png" }, GdK: { src: noImage }, HaE: { src: noImage } } }),
+            itemDefault({ name: "Zauberin", alt: ["Magierin", "Eara"], counts: { AJ: 1, AoH: 1, BdR: 1, BiBo: 1, DeK: 1, DlH: 1, DLvA: 1, GdK: 1, HaE: 1 }, images: { AJ: { src: "Bilder/Zauberin_AJ.png", caption: "Magierin" }, BdR: { src: "Bilder/Zauberin_BdR.png" }, AoH: { src: noImage }, DeK: { src: noImage }, DlH: { src: "Bilder/Zauberin_DlH.png" }, GdK: { src: noImage }, HaE: { src: noImage } } }),
+          ],
+          "Zwerg/Zwergin" : [
+            itemDefault({ name: "Zwerg", alt: ["Kram"], counts: { AJ: 1, BdR: 1, BiBo: 1, DeK: 1, DlH: 1, DLvA: 1, GdK: 1, HaE: 1 }, images: { AJ: { src: "Bilder/Zwerg_AJ.png" }, BdR: { src: "Bilder/Zwerg_BdR.png" }, DeK: { src: noImage }, DlH: { src: "Bilder/Zwerg_DlH.png" }, GdK: { src: noImage }, HaE: { src: noImage } } }),
+            itemDefault({ name: "Zwergin", alt: ["Bait"], counts: { AJ: 1, BiBo: 1, DeK: 1, DlH: 1, DLvA: 1, GdK: 1, HaE: 1 }, images: { AJ: { src: noImage }, DeK: { src: noImage }, DlH: { src: "Bilder/Zwergin_DlH.png" }, GdK: { src: noImage }, HaE: { src: noImage } } }),
+          ],
+        },
+      },
+      "Kreatur etc." : {
+        "" : [
+          itemDefault({ name: "Arbak", counts: { AG: 4 } }),
+          itemDefault({ name: "Tiefminen-Golem", counts: { DZ: 3 } }),
+        ],
+        "Barbar" : [
+          itemDefault({ id: "barbar-haeuptling", name: "Häuptling", counts: { BB: 3, BiBo: 3 }, images: { BB: { src: "Bilder/Barbar_Haeuptling.png" }, BiBo: { src: "Bilder/Barbar_Haeuptling_BiBo.png" } } }),
+          itemDefault({ id: "barbar-koenig", name: "König", counts: { BB: 1, BiBo: 1 }, images: { BB: { src: "Bilder/Barbar_Koenig.png" }, BiBo: { src: "Bilder/Barbar_Koenig_BiBo.png" } } }),
+          itemDefault({ id: "barbar-krieger", name: "Krieger", counts: { BB: 5, BiBo: 5 }, images: { BB: { src: "Bilder/Barbar_Krieger.png" }, BiBo: { src: "Bilder/Barbar_Krieger_BiBo.png" } } }),
+        ],
+        "Eiskreatur" : {
+          "" : [
+            itemDefault({ name: "Eistroll", counts: { HaE: 1 }, images: { HaE: { src: noImage } } }),
+          ],
+          "Eisskral" : [
+            itemDefault({ name: "Eisskral", counts: { HaE: NaN }, images: { HaE: { src: noImage } } }),
+            itemDefault({ name: "Skral-Lager", alt: ["Lager der Eisskrale"], counts: { HaE: 2 }, images: { HaE: { src: noImage } } }),
+          ],
+        },
+        "Krahder" : [
+          itemDefault({ name: "Corion", alt: ["Corion (grün)"], counts: { DlH: 1 } }),
+          itemDefault({ name: "Ferntahr", counts: { StSch: 1 }, images: { StSch: { src: "Bilder/Krahder.png", caption: "Krahder" } } }),
+          itemDefault({ name: "Gonhar", alt: ["Gonhar (rot)"], counts: { DlH: 1 } }),
+          itemDefault({ name: "Tuavahr", alt: ["Tuavahr (blau)", "Tuhavar"], counts: { DeK: 1, DlH: 1 }, images: { DeK: { src: noImage } } }),
+          itemDefault({ name: "Undavahr", alt: ["Undavahr (gelb)"], counts: { DlH: 1 } }),
+        ],
+        "Kreatur" : {
+          "" : [
+            itemDefault({ name: "Arrog", counts: { AoH: 1, DRidN: 4 }, images: { AoH: {  src: noImage } } }),
+            itemDefault({ name: "Bergskral", counts: { DlH: 8 } }),
+            itemDefault({ name: "Felltroll", counts: { DeK: 4, HaE: NaN }, images: { DeK: { src: noImage }, HaE: { src: noImage } } }),
+            itemDefault({ name: "Felstroll", counts: { TdfL: 1 } }),
+            itemDefault({ name: "Gorlot", counts: { DfL: 5 } }),
+            itemDefault({ name: "Grauskral", counts: { KdA: 1 } }),
+            itemDefault({ name: "Kreideskral", counts: { DfL: 5 } }),
+            itemDefault({ name: "Meerestroll", counts: { AoH: 1, DRidN: 5 }, images: { AoH: { src: noImage } } }),
+            itemDefault({ name: "Mhourl", counts: { BM: 1 } }),
+            itemDefault({ name: "Nachtgor", counts: { AoH: NaN }, images: { AoH: { src: noImage } } }),
+            itemDefault({ name: "Nerax", counts: { AoH: NaN, DRidN: 6 }, images: { AoH: { src: noImage } } }),
+            itemDefault({ name: "Schattentroll", counts: { TdfL: 1 } }),
+            itemDefault({ name: "Silberhirsch", counts: { GdK: 1 }, images: { GdK: { src: "Bilder/App/Silberhirsch.png" } } }),
+            itemDefault({ name: "Skral", counts: { BiBo: 5, DfL: 2, DLvA: 5, GdK: NaN, HaE: NaN }, images: { DfL: { src: "Bilder/Skral_DfL.png" }, GdK: { src: "Bilder/App/Skral.png" }, HaE: { src: noImage } } }),
+            itemDefault({ name: "Steppenbüffel", counts: { DeK: 4 }, images: { DeK: { src: noImage, caption: "großer Steppenbüffel" } } }),
+            itemDefault({ name: "Sumpftroll", counts: { DfL: 2 } }),
+            itemDefault({ name: "Tanghorn-Gor", counts: { KdA: 1 } }),
+            itemDefault({ name: "Wachtroll", counts: { DfL: 2, DlH: 5 }, images: { DfL: { src: "Bilder/Wachtroll_DfL.png" } } }),
+            itemDefault({ name: "Waldtroll", counts: { TdfL: 1 } }),
+            itemDefault({ name: "Wargor", counts: { DeK: 7, DlH: 6, HaE: NaN }, images: { DeK: { src: noImage }, HaE: { src: noImage } } }),
+            itemDefault({ name: "Zwergtroll", counts: { TdfL: 1 } }),
+          ],
+          "Arpache" : [
+            itemDefault({ name: "Arpache", counts: { GdK: NaN }, images: { GdK: { src: "Bilder/App/Arpache.png" } } }),
+            itemDefault({ name: "Arpachen-Königin", counts: { GdK: 1 }, images: { GdK: { src: "Bilder/App/Arpachen-Koenigin.png" } } }),
+          ],
+          "Fluggor" : [
+            itemDefault({ name: "Fluggor", counts: { BB: 3, BiBo: 3, GdK: NaN, HaE: NaN }, images: { BiBo: { src: "Bilder/Fluggor_BiBo.png" }, GdK: { src: "Bilder/App/Fluggor.png" }, HaE: { src: noImage } } }),
+            itemDefault({ name: "Fluggor-Brutmutter", counts: { GdK: 1 }, images: { GdK: { src: "Bilder/App/Fluggor-Brutmutter.png" } } }),
+            itemDefault({ name: "Fluggor-Jungtier", counts: { GdK: NaN }, images: { GdK: { src: "Bilder/App/Fluggor-Jungtier.png" } } }),
+          ],
+          "Gor" : [
+            itemDefault({ name: "Gor", counts: { AJ: 7, BiBo: 16, DeK: 10, DfL: 10, DLvA: 16, GdK: NaN, HaE: NaN }, images: { AJ: { src: "Bilder/Gor_AJ.png" }, DeK: { src: noImage }, DfL: { src: "Bilder/Gor_DfL.png" }, GdK: { src: "Bilder/App/Gor.png" }, HaE: { src: noImage } } }),
+            itemDefault({ name: "Karall", alt: ["Riesengor"], counts: { GdK: 1 }, images: { GdK: { src: "Bilder/App/Karall.png" } } }),
+          ],
+          "Troll" : [
+            itemDefault({ name: "Belagerungstroll", counts: { GdK: 1 }, images: { GdK: { src: "Bilder/App/Belagerungstroll.png" } } }),
+            itemDefault({ name: "Berserkertroll", alt: ["großer Troll"], counts: { DZ: 1 } }),
+            itemDefault({ name: "Riesentroll", alt: ["großer Troll"], counts: { DZ: 1 } }),
+            itemDefault({ name: "Troll", counts: { AJ: 1, BiBo: 5, DfL: 4, DlH: 4, DLvA: 5, GdK: NaN, StSch: 2 }, images: { AJ: { src: "Bilder/Troll_AJ.png" }, DfL: { src: "Bilder/Troll_DfL.png" }, DlH: { src: "Bilder/Troll_DlH.png" }, GdK: { src: "Bilder/App/Troll.png" }, StSch: { src: "Bilder/Kreaturen_StSch.png", caption: "Kreaturen" } } }),
+            itemDefault({ name: "Trollhäuptling", alt: ["großer Troll"], counts: { DZ: 1 } }),
+            itemDefault({ name: "Trollkönig", alt: ["Alwerons Erbe"], counts: { DfL: 1 } }),
+            itemDefault({ name: "Trunkener Troll", counts: { BiBo: 1, NH: 1 }, images: { BiBo: { src: "Bilder/Trunkener_Troll_BiBo.png" } } }),
+          ],
+          "Wardrak" : [
+            itemDefault({ name: "Leitwardrak", counts: { DZ: 1 } }),
+            itemDefault({ name: "Schattenwardrak", counts: { AJGadS: 1 } }),
+            itemDefault({ name: "Wardrak", counts: { BiBo: 2, DLvA: 2, GdK: NaN }, images: { GdK: { src: "Bilder/App/Wardrak.png" } } }),
+          ],
+        },
+        "Skelett" : [
+          itemDefault({ name: "Skelett", counts: { BM: 4, DlH: 6 }, images: { BM: { src: "Bilder/Skelett_BL.png" } } }),
+          itemDefault({ name: "Trollskelett", counts: { GdK: 1 }, images: { GdK: { src: "Bilder/App/Trollskelett.png" } } }),
+        ],
+        "untote Kreatur" : {
+          "" : [
+            itemDefault({ name: "untoter Arpache", counts: { GdK: NaN }, images: { GdK: { src: "Bilder/App/Arpache_untot.png" } } }),
+            itemDefault({ name: "untoter Skral", counts: { GdK: NaN }, images: { GdK: { src: "Bilder/App/Skral_untot.png" } } }),
+            itemDefault({ name: "untoter Troll", counts: { GdK: NaN }, images: { GdK: { src: "Bilder/App/Troll_untot.png" } } }),
+          ],
+          "untoter Gor" : [
+            itemDefault({ name: "Karall", alt: ["untoter Riesengor"], counts: { GdK: 1 }, images: { GdK: { src: "Bilder/App/Karall_untot.png" } } }),
+            itemDefault({ name: "untoter Gor", counts: { GdK: NaN }, images: { GdK: { src: "Bilder/App/Gor_untot.png" } } }),
+          ],        
+        },
+        "Wolf" : [
+          itemDefault({ name: "Wolf (graues Fell)", counts: { StSch: 2 }, images: { StSch: { src: "Bilder/Woelfe.png", caption: "Wölfe" } } }),
+          itemDefault({ name: "Wolf (schwarzes Fell)", alt: ["Leitwolf", "Lonas"], counts: { StSch: 1 }, images: { StSch: { src: "Bilder/Woelfe.png", caption: "Wölfe" } } }),
+        ],
+      },
+      "weitere Figur" : {
+        "" : [
+          itemDefault({ name: "Arkteron", counts: { DRidN: 1 } }),
+          itemDefault({ name: "Bewahrer vom Baum der Lieder", counts: { DZ: 1 } }),
+          itemDefault({ name: "Bleicher König", alt: ["Ken Dorr"], counts: { DlH: 1 } }),
+          itemDefault({ name: "Brut und Hella", counts: { FvA: 1 } }),
+          itemDefault({ name: "Büffelmonster", alt: ["Tranuk"], counts: { DfL: 1 } }),
+          itemDefault({ name: "Dunkler Magier", alt: ["Varkur"], counts: { BiBo: 1, DLvA: 1 }, images: { BiBo: { src: "Bilder/Dunkler_Magier_Varkur.png" }, DLvA: { src: "Bilder/Dunkler_Magier_Varkur.png" } } }),
+          itemDefault({ name: "Eiserner König", counts: { FvA: 1 } }),
+          itemDefault({ name: "Fahrende Händlerin", alt: ["Helea"], counts: { DfL: 1 } }),
+          itemDefault({ name: "Feuergeist", counts: { StSch: 1 } }),
+          itemDefault({ name: "Feuertakuri", counts: { MH: 1 } }),
+          itemDefault({ name: "Flederfuchs", counts: { DeK: 1, DfL: 1 }, images: { DeK: { src: noImage } } }),
+          itemDefault({ name: "Fluch", alt: ["Varatans Fluch"], counts: { CuT: 1 } }),
+          itemDefault({ name: "Fremdes Wesen", alt: ["Oron"], counts: { DfL: 1 } }),
+          itemDefault({ name: "Garz", alt: ["Handelszwerg"], counts: { DRidN: 1, GdK: 1 }, images: { GdK: { src: noImage } } }),
+          itemDefault({ name: "Gilda", counts: { AG: 1 } }),
+          itemDefault({ name: "Greim", counts: { FvA: 1 } }),
+          itemDefault({ name: "Grenolin", alt: ["Barde"], counts: { DRidN: 1 } }),
+          itemDefault({ name: "Großer Yetohe-Krieger", alt: ["Tranuk"], counts: { DeK: 1 }, images: { DeK: { src: noImage } } }),
+          itemDefault({ name: "Hademar", alt: ["Nekromant"], counts: { GdK: 1 }, images: { GdK: { src: "Bilder/App/Hademar.png" } } }),
+          itemDefault({ name: "Hallgard", alt: ["Fürst Hallgard"], counts: { AG: 1 } }),
+          itemDefault({ name: "Harthalt", counts: { DZ: 1 } }),
+          itemDefault({ name: "Hexe", alt: ["Reka"], counts: { BiBo: 1, DLvA: 1, GdK: 1 }, images: { GdK: { src: "Bilder/App/Hexe.png" } } }),
+          itemDefault({ name: "Hildorf", alt: ["Schmied"], counts: { GdK: 1 }, images: { GdK: { src: noImage } } }),
+          itemDefault({ name: "Hraak", counts: { FvA: 1 } }),
+          itemDefault({ name: "Irja", alt: ["Nixe"], counts: { DRidN: 1 }, images: { DRidN: { src: "Bilder/besondere_Figuren.png", caption: "besondere Figuren" } } }),
+          itemDefault({ name: "Ken Dorr", alt: ["Dieb"], counts: { StSch: 1 } }),
+          itemDefault({ name: "Kenvilar", counts: { DRidN: 1 } }),
+          itemDefault({ name: "Kjall", counts: { DZ: 1 } }),
+          itemDefault({ name: "Knochen-Golem", counts: { DH: 1 } }),
+          itemDefault({ name: "König Brandur", counts: { BB: 1, BiBo: 1, GdK: 1 }, images: { BiBo: { src: "Bilder/Koenig_Brandur_BiBo.png" }, GdK: { src: "Bilder/App/Koenig_Brandur.png" } } }),
+          itemDefault({ name: "Mart", alt: ["Brückenwächter"], counts: { AJ: 1, DZ: 1 }, images: { AJ: { src: noImage, caption: "Brückenwächter" } } }),
+          itemDefault({ name: "Marun", counts: { DH: 1 } }),
+          itemDefault({ name: "Melkart", alt: ["Oberster Bewahrer"], counts: { BB: 1, BiBo: 1 }, images: { BiBo: { src: "Bilder/Melkart_BiBo.png" } } }),
+          itemDefault({ name: "Meres", alt: ["Hexer"], counts: { AG: 1 } }),
+          itemDefault({ name: "Merrik", alt: ["Kartograph"], counts: { DH: 1, DRidN: 1, StSch: 1 }, images: { DH: { src: "Bilder/Merrik_DH.png" }, StSch: { src: "Bilder/Merrik_StSch.png" } } }),
+          itemDefault({ name: "Mondseehexe", counts: { KdA: 1 } }),
+          itemDefault({ name: "Muttersporne", counts: { DfL: 1 } }),
+          itemDefault({ name: "Myrk", counts: { DeK: 1 }, images: { DeK: { src: noImage } } }),
+          itemDefault({ name: "Nomion", counts: { DlH: 1 } }),
+          itemDefault({ name: "Orweyn", alt: ["Gestalt"], counts: { DeK: 1, DfL: 1 }, images: { DeK: { src: noImage, caption: "Gestalt" } } }),
+          itemDefault({ name: "Pferd", counts: { AdH: 3 } }),
+          itemDefault({ name: "Prinz Thorald", counts: { BiBo: 1, DLvA: 1, GdK: 1 }, images: { GdK: { src: "Bilder/App/Prinz_Thorald.png" } } }),
+          itemDefault({ name: "Radan", counts: { DlH: 1 } }),
+          itemDefault({ name: "Rudnar", counts: { DZ: 1 } }),
+          itemDefault({ name: "Schatten", counts: { DlH: 1 } }),
+          itemDefault({ name: "Schatten", counts: { DZ: 1 }, images: { DZ: { src: "Bilder/Schatten_DZ.png" } } }),
+          itemDefault({ name: "Schattenhäuptling", counts: { KdA: 1 } }),
+          itemDefault({ name: "Schildzwerge", counts: { BiBo: 1, DLvA: 1, GdK: 1, HaE: 2 }, images: { GdK: { src: "Bilder/App/Schildzwerge.png" }, HaE: { src: noImage } } }),
+          itemDefault({ name: "Schwarze Kogge", counts: { BM: 1 } }),
+          itemDefault({ name: "Schwarzer Ritter", counts: { GdK: 1 }, images: { GdK: { src: "Bilder/App/Schwarzer_Ritter.png" } } }),
+          itemDefault({ name: "Schwarzes Einhorn", counts: { DZ: 1 } }),
+          itemDefault({ name: "Seeriese", counts: { DRidN: 1 } }),
+          itemDefault({ name: "Shan", counts: { DZ: 1 } }),
+          itemDefault({ name: "Shron", counts: { AG: 1, DeK: 1 }, images: { DeK: { src: noImage } } }),
+          itemDefault({ name: "Siantari", counts: { AG: 1 } }),
+          itemDefault({ name: "Silberzwerge", counts: { DRidN: 3 } }),
+          itemDefault({ name: "Skuvar", counts: { AG: 1 } }),
+          itemDefault({ name: "Steppenechse", counts: { MH: 1 } }),
+          itemDefault({ name: "Steppenriese", alt: ["Banator"], counts: { KdA: 1 } }),
+          itemDefault({ name: "Taren", counts: { DRidN: 3 } }),
+          itemDefault({ name: "Thogger", counts: { DZ: 1 } }),
+          itemDefault({ name: "Tranuk", counts: { DeK: 1 }, images: { DeK: { src: noImage } } }),
+          itemDefault({ name: "Tulgori", counts: { AG: 1 } }),
+          itemDefault({ name: "Unbekannter Krieger", counts: { DRidN: 1 }, images: { DRidN: { src: "Bilder/besondere_Figuren.png", caption: "besondere Figuren" } } }),
+          itemDefault({ name: "Urtroll", counts: { DlH: 1, GdK: 1 }, images: { GdK: { src: "Bilder/App/Urtroll.png" } } }),
+          itemDefault({ name: "Vernon", counts: { AoH: 1 }, images: { AoH: { src: noImage } } }),
+          itemDefault({ name: "Vision", counts: { DRidN: 1 } }),
+          itemDefault({ name: "Warx", alt: ["König der Nerax"], counts: { DRidN: 1 }, images: { DRidN: { src: "Bilder/besondere_Figuren.png", caption: "besondere Figuren" } } }),
+          itemDefault({ name: "Wassergeist", counts: { BiBo: 1, NH: 1 }, images: { BiBo: { src: "Bilder/Wassergeist_BiBo.png" } } }),
+          itemDefault({ name: "Qurun", counts: { DRidN: 1 } }),
+          itemDefault({ name: "Zauberer des Feuers", counts: { DRidN: 1 } }),
+        ],
+        "Drache" : [
+          itemDefault({ name: "Drache", alt: ["Tarok"], counts: { AJ: 1, BiBo: 1, DLvA: 1 }, images: { AJ: { src: "Bilder/Drache_AJ.png" } } }),
+          itemDefault({ name: "Eisdrache", alt: ["Lódrak"], counts: { BM: 1 } }),
+        ],
+        "drei Schwestern" : [
+          itemDefault({ name: "Schwester", counts: { FvA: 1 }, images: { FvA: { src: "Bilder/Schwester_1.png" } } }),
+          itemDefault({ name: "Schwester", counts: { FvA: 1 }, images: { FvA: { src: "Bilder/Schwester_2.png" } } }),
+          itemDefault({ name: "Schwester", counts: { FvA: 1 }, images: { FvA: { src: "Bilder/Schwester_3.png" } } }),
+        ],
+        "Geist" : [
+          itemDefault({ name: "Geist (Blume)", alt: ["Thereyn"], counts: { DfL: 1 }, images: { DfL: { src: "Bilder/Geist.png", caption: "Geist" } } }),
+          itemDefault({ name: "Geist (Hammer)", alt: ["Pareas"], counts: { DfL: 1 }, images: { DfL: { src: "Bilder/Geist.png", caption: "Geist" } } }),
+          itemDefault({ name: "Geist (Laute)", alt: ["Guneas"], counts: { DfL: 1 }, images: { DfL: { src: "Bilder/Geist.png", caption: "Geist" } } }),
+        ],
+        "Schwarzer Herold" : [
+          itemDefault({ name: "Schwarzer Herold", counts: { BB: 1, BiBo: 1 }, images: { BiBo: { src: "Bilder/Schwarzer_Herold_BiBo.png" } } }),
+          itemDefault({ name: "Schwarzer Herold (+4)", counts: { DH: 1, NH: 1 }, images: { DH: { src: "Bilder/Schwarze_Herolde_DH.png", caption: "Schwarze Herolde" }, NH: { src: "Bilder/Schwarze_Herolde.png", caption: "Schwarze Herolde" } } }),
+          itemDefault({ name: "Schwarzer Herold (+8)", counts: { DH: 1, NH: 1 }, images: { DH: { src: "Bilder/Schwarze_Herolde_DH.png", caption: "Schwarze Herolde" }, NH: { src: "Bilder/Schwarze_Herolde.png", caption: "Schwarze Herolde" } } }),
+        ],
+        "Schwarzer Ritter" : [
+          itemDefault({ name: "Schwarzer Ritter (Blume)", alt: ["Thereyn"], counts: { DfL: 1 }, images: { DfL: { caption: "Schwarzer Ritter" } } }),
+          itemDefault({ name: "Schwarzer Ritter (Hammer)", alt: ["Pareas"], counts: { DfL: 1 }, images: { DfL: { caption: "Schwarzer Ritter" } } }),
+          itemDefault({ name: "Schwarzer Ritter (Laute)", alt: ["Guneas"], counts: { DfL: 1 }, images: { DfL: { caption: "Schwarzer Ritter" } } }),
+        ],
+        "Zauberer des Turms" : [
+          itemDefault({ name: "Kirr", alt: ["Zauberer des Turms"], counts: { DRidN: 1 }, images: { DRidN: { caption: "Zauberer des Turms" } } }),
+          itemDefault({ name: "Koraph", alt: ["Zauberer des Turms"], counts: { DRidN: 1 }, images: { DRidN: { caption: "Zauberer des Turms" } } }),
+          itemDefault({ name: "Torven", alt: ["Zauberer des Turms"], counts: { DRidN: 1 }, images: { DRidN: { caption: "Zauberer des Turms" } } }),
+        ],
+        "Zwergenstatue" : [
+          itemDefault({ name: "Boord", counts: { AG: 1 } }),
+          itemDefault({ name: "Garah", counts: { AG: 1 } }),
+          itemDefault({ name: "Hadda", counts: { AG: 1 } }),
+          itemDefault({ name: "Zor", counts: { AG: 1 } }),
+        ],
+      }
+    },
+    "Zusammenbaufigur" : {
+      "" : [
+        itemDefault({ name: "Belagerungsturm", counts: { StSch: 1 } }),
+        itemDefault({ name: "Katapult", counts: { DfL: 1, StSch: 1 }, images: { DfL: { src: "Bilder/Katapult_DfL.png" } } }),
+        itemDefault({ name: "Lager", counts: { DlH: 1 } }),
+        itemDefault({ name: "Tempelfundament", alt: ["Dunkler Tempel"], counts: { StSch: 1 }, images: { StSch: { src: "Bilder/Dunkler_Tempel.png", caption: "Dunkler Tempel" } } }),
+        itemDefault({ name: "Tempelspitze", alt: ["Dunkler Tempel"], counts: { StSch: 1 }, images: { StSch: { src: "Bilder/Dunkler_Tempel.png", caption: "Dunkler Tempel" } } }),
+        itemDefault({ name: "Trosswagen", alt: ["König Brandurs Kutsche"], counts: { DlH: 1, GdK: 1 }, images: { GdK: { src: noImage, caption: "König Brandurs Kutsche" } } }),
+        itemDefault({ name: "Turm", alt: ["Wehrturm", "Tempelmitte", "Dunkler Tempel"], counts: { BiBo: 1, DLvA: 1 } }),
+      ],
+      "Feuer" : [
+        itemDefault({ name: "Bannfeuer", counts: { MH: 1 } }),
+        itemDefault({ name: "Ewiges Feuer", counts: { AoH: 1, DRidN: 4 }, images: { AoH: { src: noImage } } }),
+      ],
+    },
+  },
+  "Karte" : {
+    "große Karte" : {
+      "" : [
+        itemDefault({ name: "Aufgabenkarte", counts: { AJ: "12*", AJGadS: "21*", BMAJ: "2*" }, images: { AJ: { src: noImage }, AJGadS: { src: noImage }, BMAJ: { src: "Bilder/Aufgabenkarte_AJSdS.png", caption: "Startkarte" } }}),
+      ],
+      "Abenteuerkarte" : {
+        "" : [
+          itemAdventureCard({ counts: { CuT: "6*" }, images: { CuT: { src: "Bilder/Abenteuerkarte_Stachelklippen.png" } } }, 1, "Die Stachelklippen"),
+          itemAdventureCard({ counts: { CuT: "10*" } }, 2, "Die Sturmweiden"),
+          itemAdventureCard({ counts: { CuT: "10*" } }, 3, "Der Stumme Wald"),
+          itemAdventureCard({ counts: { CuT: "10*" } }, 4, "Die Mauerberge"),
+        ],
+        "Bonus-Abenteuer" : [
+          itemBonusAdventureCard({ counts: { BM: "5*" }, images: { BM: { src: "Bilder/Abenteuerkarte_Feuermoore.jpg" } } }, "Die Feuermoore"),
+          itemBonusAdventureCard({ counts: { BM: "6*" }, images: { BM: { src: "Bilder/Abenteuerkarte_Treibholzbucht.jpg" } } }, "Die Treibholzbucht"),
+          itemBonusAdventureCard({ counts: { BM: "5*" }, images: { BM: { src: "Bilder/Abenteuerkarte_Westklippen.jpg" } } }, "Die Westklippen"),        
+        ],
+      },
+      "Legendenkarte etc." : {
+        "" : [
+          itemDefault({ name: "„Arbaks und Rietgrasblüten“", counts: { AG: "2*" }, images: { AG: { caption: "„Arbaks und Rietgrasblüten“" } } }),
+          itemDefault({ name: "„Benötigtes Material aus dem Grundspiel“", counts: { DRidN: 1 }, images: { DRidN: { caption: "„Benötigtes Material aus dem Grundspiel“" } } }),
+          itemDefault({ name: "„Der Bannkreis von Choranat“", counts: { MH: 1 }, images: { MH: { caption: "„Der Bannkreis von Choranat“" } } }),
+          itemDefault({ name: "„Der Feuertakuri“", counts: { MH: 1 }, images: { MH: { src: noImage, caption: "„Der Feuertakuri“" } } }),
+          itemDefault({ name: "„Der Knochen-Golem“", counts: { DH: 1 }, images: { DH: { src: noImage, caption: "„Der Knochen-Golem“" } } }),
+          itemDefault({ name: "„Der Steppennomade“", counts: { MH: 1 }, images: { MH: { src: noImage, caption: "„Der Steppennomade“" } } }),
+          itemDefault({ name: "„Die Goldenen Schilde“", counts: { DlH: 1 }, images: { DlH: { caption: "„Die Goldenen Schilde“" } } }),
+          itemDefault({ name: "„Die Kälte“", counts: { MH: 1 }, images: { MH: { src: noImage, caption: "„Die Kälte“" } } }),
+          itemDefault({ name: "„Die Macht der Runen“", counts: { MH: 1 }, images: { MH: { src: noImage, caption: "„Die Macht der Runen“" } } }),
+          itemDefault({ name: "„Die Magischen Pulver“", counts: { MH: 1 }, images: { MH: { src: noImage, caption: "„Die Magischen Pulver“" } } }),
+          itemDefault({ name: "„Die Mondbeeren“", counts: { MH: 1 }, images: { MH: { src: noImage, caption: "„Die Mondbeeren“" } } }),
+          itemDefault({ name: "„Die Sporne“", counts: { DH: "2*" }, images: { DH: { src: "Bilder/Die_Sporne_1.png", caption: "„Die Sporne“" } } }),
+          itemDefault({ name: "„Gaben der Schildzwerge“", counts: { DZ: 1 }, images: { DZ: { caption: "„Gaben der Schildzwerge“" } } }),
+          itemDefault({ name: "Gegnerkarte", counts: { SQDP: 1 } }),
+          itemDefault({ name: "„Große Kräuterkunde“", counts: { DeK: 4 }, images: { DeK: { src: noImage, caption: "„Große Kräuterkunde“" } } }),
+          itemDefault({ name: "„Hautwandler in Bärengestalt“", counts: { DH: 1 }, images: { DH: { src: noImage, caption: "„Hautwandler in Bärengestalt“" } } }),
+          itemDefault({ name: "Heldenkarte", counts: { SQDP: 1 } }),
+          itemDefault({ name: "Intro", counts: { GdK: "3*", HaE: "3*" }, images: { GdK: { src: noImage }, HaE: { src: noImage, caption: "Intro - Herz aus Eis" } } }),
+          itemDefault({ name: "„Marun, die Tapfere“", counts: { DH: 1 }, images: { DH: { src: noImage, caption: "„Marun, die Tapfere“" } } }),
+          itemDefault({ name: "Outro", counts: { GdK: "7*", HaE: "3*" }, images: { GdK: { src: noImage }, HaE: { src: noImage, caption: "Outro - Herz aus Eis" } } }),
+          itemDefault({ name: "„Regelanpassungen für 5–6 Spieler für die Legenden 13–17“", counts: { MH: 1 }, images: { MH: { src: noImage, caption: "„Regelanpassungen für 5–6 Spieler für die Legenden 13–17“" } } }),
+          itemDefault({ name: "Regelkarte „Der Dunkle Magier“", counts: { BM: 1 }, images: { BM: { src: noImage } } }),
+          itemDefault({ name: "„Tulgorischer Handel“", counts: { AG: 1 }, images: { AG: { caption: "„Tulgorischer Handel“" } } }),
+        ],
+        "Checkliste" : [
+          itemDefault({ name: "Checkliste", counts: { BiBo: 1, DLvA: 1 }, images: { BiBo: { src: noImage }, DLvA: { src: noImage } } }),
+          itemDefault({ name: "Checkliste („Das ferne Land“)", counts: { DfL: 1 }, images: { DfL: { src: "Bilder/Checkliste_DfL.png", caption: "Checkliste für die Legenden 3 bis 6" } } }),
+          itemDefault({ name: "Checkliste („Die ewige Kälte“)", counts: { DeK: 1 }, images: { DeK: { src: noImage, caption: "Checkliste" } } }),
+          itemDefault({ name: "Checkliste „Die verschollenen Legenden – Alte Geister“", counts: { AG: 1 }, images: { AG: { src: "Bilder/Checkliste_AG.png", caption: "Checkliste Die Verschollenen Legenden „Alte Geister“" } } }),
+          itemDefault({ name: "Checkliste „Graues Gebirge“", counts: { DlH: 1 }, images: { DlH: { src: "Bilder/Checkliste_DlH.png", caption: "„Checkliste Graues Gebirge“" } } }),
+          itemDefault({ name: "Checkliste „Nord-Spielplan“", counts: { DRidN: 1 }, images: { DRidN: { src: "Bilder/Checkliste_Norden.png", caption: "„Checkliste Nord-Spielplan“" } } }),
+        ],
+        "Legendenkarte" : {
+          "" : [
+            itemDefault({ name: "Legende („Die Ära des Sternenschilds“)", counts: { StSch: "36*" }, images: { StSch: { src: "Bilder/Legendenkarte_A2_StSch.png", caption: "Legendenkarten „A2“" } } }),
+            itemDefault({ name: "Legende („Story Quest – Dunkle Pfade“)", counts: { SQDP: "106*" }, images: { SQDP: { src: "Bilder/Legendenkarten_SQDP.png", caption: "Legendenkarten" } } }),
+            itemLegendCard({ counts: { BiBo: "12*", DLvA: "12*" } }, 1, "Die Ankunft der Helden"),
+            itemLegendCard({ counts: { BiBo: "14*", DLvA: "10*" } }, 2, "Die Heilung des Königs"),
+            itemLegendCard({ counts: { BiBo: "10*", DLvA: "9*", VE: "4*" } }, 3, "Die Tage des Widerstands"),
+            itemLegendCard({ counts: { BiBo: "11*", DLvA: "10*" } }, 4, "Das Geheimnis der Mine"),
+            itemLegendCard({ counts: { BiBo: "24*", DLvA: "21*" } }, 5, "Der Zorn des Drachens"),
+            itemLegendCard({ counts: { DLvA: "9*" } }, 6, "Das Erbe des Drachens"),
+            itemLegendCard({ counts: { DRidN: "17*" }, images: { DRidN: { src: "Bilder/Legendenkarte_O1.png" } } }, 7, "Die Suche nach dem Kartographen"),
+            itemLegendCard({ counts: { DRidN: "11*" } }, 8, "Ein Sturm zieht auf"),
+            itemLegendCard({ counts: { DRidN: "13*" } }, 9, "Die Mächte des Meeres"),
+            itemLegendCard({ counts: { DRidN: "29*" } }, 10, "Hadria"),
+            itemLegendCard({ counts: { BM: 1, DH: "4*", DlH: "18*", MH: "4*" } }, 11, "Das Graue Gebirge"),
+            itemLegendCard({ counts: { DlH: "20*" } }, 12, "Der Bleiche König"),
+            itemLegendCard({ counts: { DH: 1, DlH: "9*" } }, 13, "Der Tross der Andori"),
+            itemLegendCard({ counts: { BM: "2*", DH: "10*", DlH: "21*", MH: "8*" } }, 14, "Der Meister des Trolls"),
+            itemLegendCard({ counts: { BM: 1, DH: "8*", DlH: "23*", MH: "7*" } }, 15, "Der vergiftete Geist"),
+            itemLegendCard({ counts: { BM: 1, DH: "5*", DlH: "15*", MH: "4*" } }, 16, "Im Schatten der Winterburg"),
+            itemLegendCard({ counts: { BM: 1, DH: "6*", DlH: "35*", MH: "5*" } }, 17, "Die letzte Hoffnung"),
+          ],
+          "Bonus-Legende" : [
+            itemBonusLegendCard({ counts: { BB: "10*", BiBo: "10*" }, images: { BiBo: { src: "Bilder/Legendenkarten_BiBo.png", caption: "Legendenkarten" } } }, "Der Angriff der Barbaren"),
+            itemBonusLegendCard({ counts: { BM: "17*" }, images: { BM: { src: "Bilder/Der_Kampf_um_Cavern.jpg" } } }, "Der Kampf um Cavern"),
+            itemBonusLegendCard({ counts: { BM: "16*" } }, "Der Marsch der Trolle"),
+            itemBonusLegendCard({ counts: { BB: "8*", BiBo: "8*" }, images: { BiBo: { src: "Bilder/Legendenkarten_BiBo.png", caption: "Legendenkarten" } } }, "Der Vorbote des Feuers"),
+            itemBonusLegendCard({ counts: { BB: "10*", BiBo: "10*", BM: "12*" }, images: { BiBo: { src: "Bilder/Legendenkarten_BiBo.png", caption: "Legendenkarten" } } }, "Die Befreiung der Mine"),
+            itemBonusLegendCard({ counts: { BB: "8*", BiBo: "8*", BM: "8*" }, images: { BiBo: { src: "Bilder/Legendenkarten_BiBo.png", caption: "Legendenkarten" } } }, "Die Eskorte des Königs"),
+            itemBonusLegendCard({ counts: { BM: "11*" }, images: { BM: { src: "Bilder/Die_Jagd.jpg" } } }, "Die Jagd"),
+            itemBonusLegendCard({ counts: { BM: "13*" }, images: { BM: { src: "Bilder/Die_Rueckkehr.jpg" } } }, "Die Rückkehr"),
+            itemBonusLegendCard({ counts: { BM: "20*" }, images: { BM: { src: "Bilder/Die_Rueckkehr_der_Schwarzen_Kogge.jpg" } } }, "Die Rückkehr der Schwarzen Kogge"),
+            itemBonusLegendCard({ counts: { BM: "18*" } }, "Die Suche nach Grenolin"),
+            itemBonusLegendCard({ counts: { BM: "12*" }, images: { BM: { src: "Bilder/Die_vierte_Statue.jpg" } } }, "Die vierte Statue"),
+            itemBonusLegendCard({ counts: { BM: "19*" } }, "Im Bann von Choranat"),
+            itemBonusLegendCard({ counts: { BM: "10*" }, images: { BM: { src: "Bilder/Legendenkarten_Orennah.png", caption: "Legendenkarten" } } }, "Orennah"),
+          ],
+          "Legende („Adventures of Hadria“)" : [
+            itemLegendCard({ counts: { AoH: "6*" } }, 1, "Der Weg nach Yra"),
+            itemLegendCard({ counts: { AoH: "2*" } }, 2, "Die Zusammenkunft"),
+            itemLegendCard({ counts: { AoH: "6*" } }, 3, "Die Feinde vor dem Tor"),
+            itemLegendCard({ counts: { AoH: "9*" } }, 4, "Die Boten der zwei Orden"),
+            itemLegendCard({ counts: { AoH: "10*" } }, 5, "Der Eremit"),
+          ],
+          "Legende („Das ferne Land“)" : [
+            itemLegendCard({ counts: { DfL: "18*" } }, 1, "Der wahre Meister"),
+            itemLegendCard({ counts: { DfL: "16*" } }, 2, "Hinter den Flammen"),
+            itemLegendCard({ counts: { DfL: "7*" } }, 3, "Ein neues Heim"),
+            itemLegendCard({ counts: { DfL: "10*" } }, 4, "Aus dem Schatten"),
+            itemLegendCard({ counts: { DfL: "9*" } }, 5, "Das Beben"),
+            itemLegendCard({ counts: { DfL: "13*" } }, 6, "Die Höhle"),
+            itemLegendCard({ counts: { DfL: "16*" } }, 7, "Der Büffel, die Schlange und der Greif"),
+          ],
+          "Legende („Das Geheimnis des Königs“)" : [
+            itemLegendCard({ counts: { GdK: "23*" } }, 0, "Tutorial-Legende"),
+            itemLegendCard({ counts: { GdK: "10*" } }, 1, "Die große Jagd"),
+            itemLegendCard({ counts: { GdK: "11*" } }, 2, "Die Hilfe der Hexe"),
+            itemLegendCard({ counts: { GdK: "13*" } }, 3, "Die Heilung des Prinzen"),
+            itemLegendCard({ counts: { GdK: "17*" } }, 4, "Die Fee im Wald"),
+            itemLegendCard({ counts: { GdK: "24*" } }, 5, "Der Riesengor"),
+            itemLegendCard({ counts: { GdK: "24*" } }, 6, "Durch die Mine"),
+            itemLegendCard({ counts: { GdK: "28*" } }, 7, "Gipfelstürmer"),
+            itemLegendCard({ counts: { GdK: "27*" } }, 8, "Ein alter Bekannter und neue Freunde"),
+            itemLegendCard({ counts: { GdK: "25*" } }, 9, "Der Tross des Königs"),
+            itemLegendCard({ counts: { GdK: "32*" } }, 10, "Schatten der Vergangenheit"),
+            itemLegendCard({ counts: { GdK: "17*" } }, 11, "Der Überfall auf das Rietland"),
+            itemLegendCard({ counts: { GdK: "33*" } }, 12, "Sturm auf die Winterburg"),
+          ],
+          "Legende („Die ewige Kälte“)" : [
+            itemLegendCard({ counts: { DeK: "17*" } }, 1, "Der Winterstein"),
+            itemLegendCard({ counts: { DeK: "18*" } }, 2, "Das Land der drei Brüder"),
+            itemLegendCard({ counts: { DeK: "14*" } }, 3, "Die Spur der Macht"),
+            itemLegendCard({ counts: { DeK: "18*" } }, 4, "Die Pranken des Winters"),
+          ],
+          "Legende („Die verschollenen Legenden – Alte Geister“)" : [
+            itemLegendCard({ counts: { AG: "14*" }, images: { AG: { src: "Bilder/Legendenkarte_A1_AG.png" } } }, 1, "Die Spur des Drachen"),
+            itemLegendCard({ counts: { AG: "29*" } }, 2, "Der Hexer aus Andor"),
+            itemLegendCard({ counts: { AG: "25*" } }, 3, "Die steinernen Drei"),
+          ],
+          "Legende („Die verschollenen Legenden – Düstere Zeiten“)" : [
+            itemLegendCard({ counts: { DZ: "17*" }, images: { DZ: { src: "Bilder/Legendenkarte_A1_DZ.png" } } }, 1, "Schatten über Cavern"),
+            itemLegendCard({ counts: { DZ: "39*" } }, 2, "Fremde Heimat"),
+            itemLegendCard({ counts: { DZ: "16*" } }, 3, "Die steinernen Drei"),
+          ],
+          "Legende („Herz aus Eis“)" : [
+            itemLegendCard({ counts: { HaE: "17*" }, images: { HaE: { src: "Bilder/App/_HaE_Legende_1.png", caption: "Legende 1 – „Wintereinbruch“" } } }, 1, "Wintereinbruch"),
+            itemLegendCard({ counts: { HaE: "25*" } }, 2, "Drohende Kälte"),
+            itemLegendCard({ counts: { HaE: "16*" } }, 3, "Herz aus Eis"),
+          ],
+        },
+      },
+      "Mini-Erweiterung" : [
+        itemDefault({ name: "„Das Chaos“", counts: { BM: 1 } }),
+        itemDefault({ name: "„Das letzte Lagerfeuer“", counts: { BM: 1 }, images: { BM: { src: noImage } } }),
+        itemDefault({ name: "„Das Licht der fünften Stunde“", counts: { BM: 1 } }),
+        itemDefault({ name: "„Der Alte Wehrturm“", counts: { BM: 1 } }),
+        itemDefault({ name: "„Der Magische Sturm“", counts: { BM: 1 }, images: { BM: { src: noImage } } }),
+        itemDefault({ name: "„Der Ruf der Skrale“", counts: { BM: 1 } }),
+        itemDefault({ name: "„Die Bruderfeuer“", counts: { BM: 1 } }),
+        itemDefault({ name: "„Die Geschenke vom Baum der Lieder“", alt: ["Les Présents de l'Arbre des Chants"], counts: { BM: 1 }, images: { BM : { src: "Bilder/Les_Presents_de_l_Arbre_des_Chants.png", caption: "Les Présents de l'Arbre des Chants" } } }),
+        itemDefault({ name: "„Die Helden von Córdoba“", alt: ["Los Héroes de Córdoba"], counts: { BM: 1 }, images: { BM: { src: noImage } } }),
+        itemDefault({ name: "„Die Magie von Choranat“", counts: { BM: 1 } }),
+        itemDefault({ name: "„Die Nixe Irja“", counts: { BM: 1 } }),
+        itemDefault({ name: "„Die Taverne von Andor“", counts: { LdK: 1 } }),
+        itemDefault({ name: "„Die Wunschbrunnen“", counts: { BM: 1 } }),
+        itemDefault({ name: "„Garz der Handelszwerg“", counts: { BM: 1 } }),
+        itemDefault({ name: "„Koram, der Gor-Häuptling“", counts: { BM: 1 } }),
+        itemDefault({ name: "„Launische Waldgeister“", counts: { BM: 1 } }),
+        itemDefault({ name: "„Narkonna“", counts: { BM: 1 } }),
+        itemDefault({ name: "„Varatans Leuchtturm“", counts: { BM: 1 } }),
+        itemDefault({ name: "„Varkur, der Dunkle Magier“", counts: { BM: 1 } }),
+        itemDefault({ name: "„Zwei junge Bewahrer“", counts: { BM: 1 } }),
+      ],
+    },
+    "kleine Karte" : {
+      "" : [
+        itemDefault({ name: "„Beben“", counts: { DfL: 1 } }),
+        itemDefault({ name: "„Der Schwarze Herold“", counts: { BB: "4*", BiBo: "4*" }, images: { BiBo: { caption: "„Der Schwarze Herold“-Karte" } } }),
+        itemDefault({ name: "Erzählerkarte", counts: { BdR: "22*" } }),
+        itemDefault({ name: "Fluchkarte", counts: { CuT: "6*" } }),
+        itemDefault({ name: "Schicksalskarte", counts: { BiBo: "10*", DLvA: "10*" } }),
+        itemDefault({ name: "„Solo-Variante: Stinner“", counts: { BM: 2 } }),
+        itemDefault({ name: "Takota-Karte", counts: { DfL: "4*" } }),
+        itemDefault({ name: "„Tücke der Kreaturen“", counts: { BB: "3*", BiBo: "3*" }, images: { BiBo: { caption: "„Tücke der Kreaturen“-Karte" } } }),
+        itemDefault({ name: "Turmkarte", counts: { DfL: "4*" } }),
+        itemDefault({ name: "Übersichtskarte", counts: { BdR: "2*" }, images: { BdR: { src: "Bilder/Uebersichtskarten.png", caption: "Übersichtskarten" } } }),
+        itemDefault({ name: "Zauber des Feuers", counts: { DRidN: "4*" } }),
+        itemDefault({ name: "Zauber des Turms", counts: { DRidN: "3*" } }),
+      ],
+      "Aufgabenkarte" : [
+        itemDefault({ name: "Aufgabenkarte „Arbaks“", counts: { BdR: 1 }, images: { BdR: { src: noImage } } }),
+        itemDefault({ name: "Aufgabenkarte „Ballista“", counts: { BdR: 1 }, images: { BdR: { src: noImage, caption: "Aufgabenkarte „Die Ballista“" } } }),
+        itemDefault({ name: "Aufgabenkarte „Brandurs Ehrenwache“", counts: { BdR: 1 }, images: { BdR: { src: noImage } } }),
+        itemDefault({ name: "Aufgabenkarte „Feuergeist“", counts: { BdR: 1 }, images: { BdR: { src: noImage, caption: "Aufgabenkarte „Der Feuergeist“" } } }),
+        itemDefault({ name: "Aufgabenkarte „Gefangene“", counts: { BdR: 1 }, images: { BdR: { src: noImage, caption: "Aufgabenkarte „Die Gefangenen“" } } }),
+        itemDefault({ name: "Aufgabenkarte „Hadrisches Feuer“", counts: { BdR: 1 }, images: { BdR: { src: noImage, caption: "Aufgabenkarte „Das Hadrische Feuer“" } } }),
+        itemDefault({ name: "Aufgabenkarte „Mhourl“", counts: { BdR: 1 }, images: { BdR: { src: noImage, caption: "Aufgabenkarte „Der Mhourl“" } } }),
+        itemDefault({ name: "Aufgabenkarte „Jrain“", alt: ["König der Fluggors"], counts: { BdR: 1 }, images: { BdR: { src: noImage, caption: "Aufgabenkarte „Jrain, der König der Fluggor“" } } }),
+        itemDefault({ name: "Aufgabenkarte „Orril“", alt: ["Barde"], counts: { BdR: 1 }, images: { BdR: { src: noImage, caption: "Aufgabenkarte „Orril, der Barde“" } } }),
+        itemDefault({ name: "Aufgabenkarte „Riesentroll“", counts: { BdR: 1 }, images: { BdR: { src: noImage, caption: "Aufgabenkarte „Der Riesentroll“" } } }),
+        itemDefault({ name: "Aufgabenkarte „Rofus“", alt: ["Plünderer"], counts: { BdR: 1 }, images: { BdR: { src: noImage, caption: "Aufgabenkarte „Rofus, der Plünderer aus den Flusslanden“" } } }),
+        itemDefault({ name: "Aufgabenkarte „Schwarzer Herold“", counts: { BdR: 1 }, images: { BdR: { src: noImage, caption: "Aufgabenkarte „Der Schwarze Herold“" } } }),
+        itemDefault({ name: "Aufgabenkarte „Shron“", alt: ["Sohn des Hark"], counts: { BdR: 1 }, images: { BdR: { caption: "Aufgabenkarte „Shron, der Sohn des Hark“" } } }),
+        itemDefault({ name: "Aufgabenkarte „Trumm“", alt: ["Skral-Hexe"], counts: { BdR: 1 }, images: { BdR: { src: noImage, caption: "Aufgabenkarte „Trumm, die Skral-Hexe“" } } }),
+        itemDefault({ name: "Aufgabenkarte „Trunkener Troll“", counts: { BdR: 1 }, images: { BdR: { src: noImage, caption: "Aufgabenkarte „Der Trunkene Troll“" } } }),
+        itemDefault({ name: "Aufgabenkarte „Vorsehung“", counts: { BdR: 1 }, images: { BdR: { src: noImage, caption: "Aufgabenkarte „Die Vorsehung“" } } }),
+      ],
+      "Auftragskarte" : [
+        itemDefault({ name: "Auftragskarte (90)", counts: { DRidN: "3*" }, images: { DRidN: { src: noImage, caption: "Auftragskarte" } } }),
+        itemDefault({ name: "Auftragskarte (100)", counts: { DRidN: "3*" }, images: { DRidN: { caption: "Auftragskarte" } } }),
+        itemDefault({ name: "Auftragskarte (114)", counts: { DRidN: "3*" }, images: { DRidN: { src: noImage, caption: "Auftragskarte" } } }),
+      ],
+      "Ereigniskarte etc." : {
+        "Ereigniskarte" : {
+          "" : [
+            itemDefault({ name: "Ereigniskarte („Das ferne Land“)", counts: { DfL: "24*" }, images: { DfL: { src: "Bilder/Ereigniskarte.png", caption: "Ereigniskarte" } } }),
+            itemDefault({ name: "Ereigniskarte „Geheimer See“", counts: { BiBo: "10*", DLvA: "10*" } }),
+            itemDefault({ name: "goldene Ereigniskarte", counts: { BiBo: "34*", DLvA: "34*" }, images: { BiBo: { src: "Bilder/Ereigniskarte_golden.png" }, DLvA: { src: "Bilder/Ereigniskarte_golden.png" } } }),
+            itemDefault({ name: "weiße Ereigniskarte", counts: { BB: "17*", BiBo: "17*" }, images: { BB: { src: noImage }, BiBo: { src: "Bilder/Ereigniskarte_weiss.png", caption: "Weißes Ereignis" } } }),
+          ],
+          "bronzene Ereigniskarte" : [
+            itemDefault({ name: "bronzene Ereigniskarte", counts: { DlH: "32*" }, images: { DlH: { src: noImage, caption: "Ereigniskarte" } } }),
+            itemDefault({ name: "bronzene Start-Ereigniskarte", counts: { DlH: 1 }, images: { DlH: { src: noImage, caption: "Start-Ereigniskarte" } } }),
+          ],
+          "silberne Ereigniskarte" : [
+            itemDefault({ name: "silberne Ereigniskarte", counts: { BiBo: "11*", DLvA: "11*" }, images: { BiBo: { src: "Bilder/Ereigniskarte_silbern.png" }, DLvA: { src: "Bilder/Ereigniskarte_silbern.png" } } }),
+            itemDefault({ name: "silberne Start-Ereigniskarte", counts: { BiBo: 1, DLvA: 1 }, images: { BiBo: { src: "Bilder/Ereigniskarte_silbern_Start.png" }, DLvA: { src: "Bilder/Ereigniskarte_silbern_Start.png" } } }),
+          ],
+        },
+        "Windkarte" : [
+          itemDefault({ name: "Start-Windkarte", alt: ["START-Windkarte"], counts: { DRidN: 1 }, images: { DRidN: { src: "Bilder/Windkarte_Start.png", caption: "START-Windkarte" } } }),
+          itemDefault({ name: "Windkarte", counts: { DRidN: "13*" } }),
+        ],
+      },
+      "Freundekarte" : [
+        itemDefault({ name: "Freundekarte „Brolaf“", alt: ["Herold der Schildzwerge"], counts: { BdR: 1 }, images: { BdR: { caption: "Freundekarte „Brolaf, Herold der Schildzwerge“" } } }),
+        itemDefault({ name: "Freundekarte „Grenolin“", alt: ["Freundeskarte", "Barde"], counts: { BdR: 1, CuT: 1 }, images: { BdR: { src: noImage, caption: "Freundekarte „Grenolin, der Barde“" }, CuT: { src: "Bilder/Freundeskarte_Grenolin.png", caption: "Freundeskarte „Grenolin, der Barde“" } } }),
+        itemDefault({ name: "Freundekarte „Gända“", alt: ["Bewahrerin"], counts: { BdR: 1 }, images: { BdR: { src: noImage, caption: "Freundekarte „Gända, Bewahrerin aus dem Wachsamen Wald“" } } }),
+        itemDefault({ name: "Freundekarte „Jarid“", alt: ["Wassermagierin"], counts: { BdR: 1 }, images: { BdR: { src: noImage, caption: "Freundekarte „Jarid, Wassermagierin aus Danwar“" } } }),
+        itemDefault({ name: "Freundekarte „Kirr“", alt: ["Freundeskarte", "Zauberer der Zeit"], counts: { CuT: 1 }, images: { CuT: { src: noImage, caption: "Freundeskarte „Kirr, der Zauberer der Zeit“" } } }),
+        itemDefault({ name: "Freundekarte „Lifornus“", alt: ["Zauberer des Feuers"], counts: { BdR: 1 }, images: { BdR: { src: noImage, caption: "Freundekarte „Lifornus, Zauberer des Feuers“" } } }),
+        itemDefault({ name: "Freundekarte „Merrik“", alt: ["Freundeskarte", "Kartograph"], counts: { CuT: 1 }, images: { CuT: { src: noImage, caption: "Freundeskarte „Merrik, der Kartograph“" } } }),
+        itemDefault({ name: "Freundekarte „Trieest“", alt: ["Feuerkrieger"], counts: { BdR: 1 }, images: { BdR: { src: noImage, caption: "Freundekarte „Trieest, der Feuerkrieger“" } } }),
+        itemDefault({ name: "Freundekarte „Unbekannter Krieger“", alt: ["Freundeskarte"], counts: { CuT: 1 }, images: { CuT: { src: noImage, caption: "Freundeskarte „Unbekannter Krieger“" } } }),
+        itemDefault({ name: "Freundekarte „Veest“", alt: ["Bogenschütze"], counts: { BdR: 1 }, images: { BdR: { src: noImage, caption: "Freundekarte „Veest, Bogenschütze aus dem Wachsamen Wald“" } } }),
+        itemDefault({ name: "Freundekarte „Wrort“", alt: ["reisender Temm"], counts: { BdR: 1 }, images: { BdR: { src: noImage, caption: "Freundekarte „Wrort, der reisende Temm“" } } }),
+      ],
+      "Heldenkarte" : [
+        itemDefault({ name: "Heldenkarte „Bogenschützin“", alt: ["Chada"], counts: { BdR: "3*", CuT: "3*" }, images: { BdR: { src: "Bilder/Heldenkarten_Bogenschuetzin.png", caption: "Heldenkarten „Chada“" }, CuT: { src: "Bilder/Heldenkarten_Bogenschuetzin_CuT.png", caption: "Heldenkarten „Chada“" } } }),
+        itemDefault({ name: "Heldenkarte „Hüterin“", alt: ["Kheela"], counts: { BdR: "3*" }, images: { BdR: { src: "Bilder/Heldenkarten_Hueterin.png", caption: "Heldenkarten „Kheela“" } } }),
+        itemDefault({ name: "Heldenkarte „Krieger“", alt: ["Thorn"], counts: { BdR: "3*", CuT: "3*" }, images: { BdR: { src: "Bilder/Heldenkarten_Krieger.png", caption: "Heldenkarten „Thorn“" }, CuT: { src: "Bilder/Heldenkarten_Krieger_CuT.png", caption: "Heldenkarten „Thorn“" } } }),
+        itemDefault({ name: "Heldenkarte „Seekrieger“", alt: ["Stinner"], counts: { CuT: "3*" }, images: { CuT: { src: "Bilder/Heldenkarten_Seekrieger.png", caption: "Heldenkarten „Stinner“" } } }),
+        itemDefault({ name: "Heldenkarte „Wolfskrieger“", alt: ["Orfen"], counts: { BdR: "4*" }, images: { BdR: { src: "Bilder/Heldenkarten_Wolfskrieger.png", caption: "Heldenkarten „Orfen“" } } }),
+        itemDefault({ name: "Heldenkarte „Zauberin“", alt: ["Eara"], counts: { BdR: "3*" }, images: { BdR: { src: "Bilder/Heldenkarten_Zauberin.png", caption: "Heldenkarten „Eara“" } } }),
+        itemDefault({ name: "Heldenkarte „Zwerg“", alt: ["Kram"], counts: { BdR: "3*" }, images: { BdR: { src: "Bilder/Heldenkarten_Zwerg.png", caption: "Heldenkarten „Kram“" } } }),
+      ],
+      "Kampfkarte" : [
+        itemDefault({ name: "Kampfkarte „Häuptling“", counts: { BB: "3*", BiBo: "3*" }, images: { BiBo: { src: noImage, caption: "Kampfkarte" } } }),
+        itemDefault({ name: "Kampfkarte „König“", counts: { BB: 1, BiBo: 1 }, images: { BiBo: { src: noImage, caption: "Kampfkarte" } } }),
+        itemDefault({ name: "Kampfkarte „Krieger“", counts: { BB: "5*", BiBo: "5*" }, images: { BiBo: { src: "Bilder/Kampfkarte_Krieger_BiBo.png", caption: "Kampfkarte" } } }),
+      ],
+      "Nebelkarte etc." : {
+        "Ausrüstungskarte" : [
+          itemDefault({ name: "Ausrüstungskarte „Hadrisches Stundenglas“", counts: { CuT: 2 } }),
+          itemDefault({ name: "Ausrüstungskarte „Mhares Amulett“", counts: { CuT: 1 } }),
+          itemDefault({ name: "Ausrüstungskarte „Orweyns Hammer“", counts: { CuT: 1 } }),
+          itemDefault({ name: "Ausrüstungskarte „Pfeile“", counts: { CuT: 5 } }),
+          itemDefault({ name: "Ausrüstungskarte „Sturmschild“", counts: { CuT: 1 } }),
+          itemDefault({ name: "Ausrüstungskarte „Trinkschlauch“", counts: { CuT: 2 } }),
+          itemDefault({ name: "Ausrüstungskarte „Varatans Helm“", alt: ["Varatans Helm der Macht"], counts: { BM: 3 }, images: { BM: { caption: "Ausrüstungskarte „Varatans Helm der Macht“" } } }),
+        ],
+        "Begegnungskarte" : [
+          itemDefault({ name: "Begegnungskarte „Apfelnüsse“", counts: { BdR: 1 }, images: { BdR: { src: noImage } } }),
+          itemDefault({ name: "Begegnungskarte „Bruderschild“", counts: { BdR: 1 }, images: { BdR: { src: noImage, caption: "Begegnungskarte „Der Bruderschild“" } } }),
+          itemDefault({ name: "Begegnungskarte „Calrai“", counts: { BdR: 1 }, images: { BdR: { src: noImage } } }),
+          itemDefault({ name: "Begegnungskarte „Fernrohr“", counts: { BdR: 1 } }),
+          itemDefault({ name: "Begegnungskarte „Fir“", counts: { BdR: 1 }, images: { BdR: { src: noImage } } }),
+          itemDefault({ name: "Begegnungskarte „Fluggor“", counts: { BdR: 8 }, images: { BdR: { src: noImage } } }),
+          itemDefault({ name: "Begegnungskarte „Gor“", counts: { BdR: "6*" } }),
+          itemDefault({ name: "Begegnungskarte „Gorlot“", counts: { BdR: "3*" }, images: { BdR: { src: noImage } } }),
+          itemDefault({ name: "Begegnungskarte „Hadrischer Spiegel“", counts: { BdR: 1 }, images: { BdR: { src: noImage } } }),
+          itemDefault({ name: "Begegnungskarte „Hadrisches Stundenglas“", counts: { BdR: 1 }, images: { BdR: { src: noImage } } }),
+          itemDefault({ name: "Begegnungskarte „Hagrod“", counts: { BdR: 1 } }),
+          itemDefault({ name: "Begegnungskarte „Horn“", counts: { BdR: 1 }, images: { BdR: { src: noImage } } }),
+          itemDefault({ name: "Begegnungskarte „Knochenäste“", counts: { BdR: 1 }, images: { BdR: { src: noImage } } }),
+          itemDefault({ name: "Begegnungskarte „Kreideskral“", counts: { BdR: "4*" }, images: { BdR: { src: noImage } } }),
+          itemDefault({ name: "Begegnungskarte „Shan“", alt: ["Schattenhexe"], counts: { BdR: 1 }, images: { BdR: { src: noImage, caption: "Begegnungskarte „Shan, die Schattenhexe“" } } }),
+          itemDefault({ name: "Begegnungskarte „Skelettkrieger“", counts: { BdR: "2*" }, images: { BdR: { src: noImage } } }),
+          itemDefault({ name: "Begegnungskarte „Skral“", counts: { BdR: 3 }, images: { BdR: { src: noImage } } }),
+          itemDefault({ name: "Begegnungskarte „Skralschamane“", counts: { BdR: "2*" }, images: { BdR: { src: noImage } } }),
+          itemDefault({ name: "Begegnungskarte „Trinkschlauch“", counts: { BdR: 1 }, images: { BdR: { src: noImage } } }),
+          itemDefault({ name: "Begegnungskarte „Troll“", counts: { BdR: "7*" }, images: { BdR: { src: noImage } } }),
+          itemDefault({ name: "Begegnungskarte „Tulgorischer Höhlenwicht“", counts: { BdR: 2 }, images: { BdR: { src: noImage } } }),
+          itemDefault({ name: "Begegnungskarte „Wardrak“", counts: { BdR: "4*" }, images: { BdR: { src: noImage } } }),
+        ],
+        "Nebelkarte" : [
+          itemDefault({ name: "Nebelkarte „Ean Quella“", alt: ["Zauberin"], counts: { CuT: 2 }, images: { CuT: { src: noImage, caption: "Nebelkarte „Ean Quella, die Zauberin“" } } }),
+          itemDefault({ name: "Nebelkarte „Fluggors“", alt: ["Gorain"], counts: { CuT: 2 }, images: { CuT: { src: noImage, caption: "Nebelkarte „Gorain, Fluggors“" } } }),
+          itemDefault({ name: "Nebelkarte „Gor“", counts: { CuT: 3 }, images: { CuT: { src: noImage } } }),
+          itemDefault({ name: "Nebelkarte „Kentar“", alt: ["Kenvilars Tochter"], counts: { CuT: 2 }, images: { CuT: { src: noImage, caption: "Nebelkarte „Kentar, Kenvilars Tochter“" } } }),
+          itemDefault({ name: "Nebelkarte „Krumm“", alt: ["Hexenmeister"], counts: { CuT: 3 }, images: { CuT: { src: noImage, caption: "Nebelkarte „Krumm, der Hexenmeister“" } } }),
+          itemDefault({ name: "Nebelkarte „Meerestroll“", counts: { CuT: 1 }, images: { CuT: { src: noImage } } }),
+          itemDefault({ name: "Nebelkarte „Meres“", alt: ["Hexer"], counts: { CuT: 1 }, images: { CuT: { src: noImage, caption: "Nebelkarte „Meres, der Hexer aus Andor“" } } }),
+          itemDefault({ name: "Nebelkarte „Niron“", alt: ["Späher"], counts: { CuT: 1 }, images: { CuT: { src: noImage, caption: "Nebelkarte „Niron, der Späher“" } } }),
+          itemDefault({ name: "Nebelkarte „Nordskral“", counts: { CuT: 3 }, images: { CuT: { src: noImage } } }),
+          itemDefault({ name: "Nebelkarte „Orril“", alt: ["Schwarzer Barde"], counts: { CuT: 2 }, images: { CuT: { src: noImage, caption: "Nebelkarte „Orril, der Schwarze Barde“" } } }),
+          itemDefault({ name: "Nebelkarte „Pero“", alt: ["Seeräuber"], counts: { CuT: 1 }, images: { CuT: { src: noImage, caption: "Nebelkarte „Pero, der Seeräuber“" } } }),
+          itemDefault({ name: "Nebelkarte „Roa“", alt: ["Callems Raubvogel"], counts: { CuT: 1 }, images: { CuT: { src: noImage, caption: "Nebelkarte „Roa, Callems Raubvogel“" } } }),
+          itemDefault({ name: "Nebelkarte „Ruuf“", alt: ["Seekrieger"], counts: { CuT: 1 }, images: { CuT: { src: noImage, caption: "Nebelkarte „Ruuf, der Seekrieger“" } } }),
+          itemDefault({ name: "Nebelkarte „Schlange“", alt: ["Vypera"], counts: { CuT: 1 }, images: { CuT: { src: noImage, caption: "Nebelkarte „Vypera, Schlange“" } } }),
+          itemDefault({ name: "Nebelkarte „Schwarzes Einhorn“", counts: { CuT: 1 }, images: { CuT: { src: noImage } } }),
+          itemDefault({ name: "Nebelkarte „Thogger“", alt: ["Druide"], counts: { CuT: 1 }, images: { CuT: { src: noImage, caption: "Nebelkarte „Thogger, Druide der Taren“" } } }),
+          itemDefault({ name: "Nebelkarte „Waldgeist“", counts: { CuT: 2 }, images: { CuT: { src: noImage } } }),
+        ],
+      },
+      "Sonderkarte" : [
+        itemDefault({ name: "Sonderkarte „Callem“", alt: ["Abtrünniger"], counts: { CuT: 1 }, images: { BdR: { src: "Bilder/Sonderkarte_Callem.png", caption: "Sonderkarte „Callem, der Abtrünnige“" } } }),
+        itemDefault({ name: "Sonderkarte „Drukil“", alt: ["Hautwandler"], counts: { CuT: 1 }, images: { BdR: { src: "Bilder/Sonderkarte_Drukil.png", caption: "Sonderkarte „Drukil, der Hautwandler“" } } }),
+        itemDefault({ name: "Sonderkarte „Leam“", alt: ["Schiffbrüchiger"], counts: { CuT: 1 }, images: { BdR: { src: "Bilder/Sonderkarte_Leam.png", caption: "Sonderkarte „Ein Schiffbrüchiger“" } } }),
+      ],
+    },
+  },
+  "Plättchen" : {
+    "" : [
+      itemDefault({ name: "Portal", counts: { DRidN: 5 } }),
+    ],
+    "Aufgabenplättchen" : {
+      "" : [
+        itemTaskToken({ counts: { AJ: 3 } }, "Beeren-Korb"),
+        itemTaskToken({ counts: { AJ: 3 } }, "Befestigung"),
+        itemTaskToken({ counts: { AJGadS: "3*" }, images: { AJGadS: { src: "Bilder/Aufgabenplaettchen.png", caption: "Aufgabenplättchen" } } }, "Einwohner"),
+        itemTaskToken({ counts: { AJ: 1 } }, "Falke"),
+        itemTaskToken({ counts: { AJGadS: 1 }, images: { AJGadS: { src: "Bilder/Aufgabenplaettchen.png", caption: "Aufgabenplättchen" } } }, "Finsterer Tunnel"),
+        itemTaskToken({ counts: { AJGadS: 1 }, images: { AJGadS: { src: "Bilder/Aufgabenplaettchen.png", caption: "Aufgabenplättchen" } } }, "Geröll"),
+        itemTaskToken({ counts: { AJ: 1 } }, "Heiltrank"),
+        itemTaskToken({ counts: { AJGadS: 1 }, images: { AJGadS: { src: "Bilder/Aufgabenplaettchen.png", caption: "Aufgabenplättchen" } } }, "Holzburg"),
+        itemTaskToken({ counts: { AJGadS: 1 }, images: { AJGadS: { src: "Bilder/Aufgabenplaettchen.png", caption: "Aufgabenplättchen" } } }, "Holzwachturm"),
+        itemTaskToken({ counts: { AJGadS: 1 }, images: { AJGadS: { src: "Bilder/Aufgabenplaettchen.png", caption: "Aufgabenplättchen" } } }, "Hornbogen"),
+        itemTaskToken({ alt: ["Minenplättchen „Krake“", "Irlok"], counts: { AJGadS: 1 }, images: { AJGadS: { src: "Bilder/Aufgabenplaettchen.png", caption: "Aufgabenplättchen" } } }, "Krake"),
+        itemTaskToken({ counts: { AJ: "4*" } }, "Notenbuch"),
+        itemTaskToken({ counts: { AJGadS: 4 }, images: { AJGadS: { src: "Bilder/Aufgabenplaettchen.png", caption: "Aufgabenplättchen" } } }, "Schwerter"),
+        itemTaskToken({ counts: { AJ: 3 } }, "verschmutzter Brunnen"),
+      ],
+      "Aufgabenplättchen „Brief“" : [
+        itemTaskToken({ counts: { AJ: 1 }, images: { AJ: { src: "Bilder/Aufgabenplaettchen_Brief.png", caption: "Aufgabenplättchen „Brief“" } } }, "blauer Brief"),
+        itemTaskToken({ counts: { AJ: 1 }, images: { AJ: { src: "Bilder/Aufgabenplaettchen_Brief.png", caption: "Aufgabenplättchen „Brief“" } } }, "gelber Brief"),
+        itemTaskToken({ counts: { AJ: 1 }, images: { AJ: { src: "Bilder/Aufgabenplaettchen_Brief.png", caption: "Aufgabenplättchen „Brief“" } } }, "grüner Brief"),
+        itemTaskToken({ alt: ["Aufgabenplättchen „lila Brief“"], counts: { AJ: 1 }, images: { AJ: { src: "Bilder/Aufgabenplaettchen_Brief.png", caption: "Aufgabenplättchen „Brief“" } } }, "violetter Brief"),
+      ],
+      "Aufgabenplättchen „leerer Brunnen“" : [
+        itemTaskToken({ counts: { AJGadS: 3 }, images: { AJGadS: { src: "Bilder/Aufgabenplaettchen.png", caption: "Aufgabenplättchen" } } }, "leerer Brunnen"),
+        itemTaskToken({ counts: { AJGadS: 1 }, images: { AJGadS: { src: "Bilder/Aufgabenplaettchen.png", caption: "Aufgabenplättchen" } } }, "leerer Zwergenbrunnen"),
+      ],
+      "Aufgabenplättchen „Runenstein“" : [
+        itemDefault({ name: "Drachenstein", alt: ["Runensteinplättchen"], counts: { BMAJ: 1 } }),
+        itemDefault({ name: "Gorstein", alt: ["Runensteinplättchen"], counts: { BMAJ: 1 } }),
+        itemDefault({ name: "Sonnenstein", alt: ["Runensteinplättchen"], counts: { BMAJ: 1 } }),
+        itemDefault({ name: "Stein der Ungewissheit", alt: ["Runensteinplättchen"], counts: { BMAJ: 1 } }),
+        itemDefault({ name: "Winterstein", alt: ["Runensteinplättchen"], counts: { BMAJ: 1 } }),
+      ],
+      "Aufgabenplättchen „Wappen“" : [
+        itemTaskToken({ counts: { AJ: 1 }, images: { AJ: { src: "Bilder/Aufgabenplaettchen_Wappen_blau.png" } } }, "blaues Wappen"),
+        itemTaskToken({ counts: { AJ: 1 }, images: { AJ: { src: "Bilder/Aufgabenplaettchen_Wappen_gelb.png" } } }, "gelbes Wappen"),
+        itemTaskToken({ counts: { AJ: 1 }, images: { AJ: { src: "Bilder/Aufgabenplaettchen_Wappen_gruen.png" } } }, "grünes Wappen"),
+        itemTaskToken({ alt: ["Aufgabenplättchen „lila Wappen“"], counts: { AJ: 1 }, images: { AJ: { src: "Bilder/Aufgabenplaettchen_Wappen_lila.png", caption: "Aufgabenplättchen „lila Wappen“" } } }, "violettes Wappen"),
+      ],
+      "Aufgabenplättchen „Wolfskraut“" : [
+        itemTaskToken({ counts: { AJ: 2 }, images: { AJ: { src: "Bilder/Aufgabenplaettchen_Wolfskraut_gruen.png", caption: "Aufgabenplättchen „Wolfskraut“" } } }, "grünes Wolfskraut"),
+        itemTaskToken({ alt: ["Aufgabenplättchen „lila Wolfskraut“"], counts: { AJ: 2 }, images: { AJ: { src: "Bilder/Aufgabenplaettchen_Wolfskraut_lila.png", caption: "Aufgabenplättchen „Wolfskraut“" } } }, "violettes Wolfskraut"),
+        itemTaskToken({ counts: { AJ: 2 }, images: { AJ: { src: "Bilder/Aufgabenplaettchen_Wolfskraut_weiss.png", caption: "Aufgabenplättchen „Wolfskraut“" } } }, "weißes Wolfskraut"),
+      ],
+    },
+    "Ausbau" : [
+      itemDefault({ name: "Achterballista", alt: ["Schiffsausbau"], counts: { DRidN: 1 } }),
+      itemDefault({ name: "Bug-Figur", alt: ["Schiffsausbau"], counts: { DRidN: 1 } }),
+      itemDefault({ name: "Zweiter Mast", alt: ["Schiffsausbau"], counts: { DRidN: 1 } }),
+    ],
+    "Bauernplättchen etc." : {
+      "" : [
+        itemDefault({ name: "Agren", counts: { GdK: 1, HaE: 1 }, images: { GdK: { src: "Bilder/App/Agren.png" }, HaE: { src: noImage } } }),
+      ],
+      "Azturia" : [
+        itemDefault({ name: "Azturia „Stärkepunkte +1“", counts: { DfL: 1 }, images: { DfL: { src: "Bilder/Azturia.png", caption: "Azturia" } } }),
+        itemDefault({ name: "Azturia „Stärkepunkte +2“", counts: { DfL: 2 }, images: { DfL: { src: "Bilder/Azturia.png", caption: "Azturia" } } }),
+        itemDefault({ name: "Azturia „Stärkepunkte +3“", counts: { DfL: 1 }, images: { DfL: { src: "Bilder/Azturia.png", caption: "Azturia" } } }),
+      ],
+      "Schildplättchen" : {
+        "" : [
+          itemDefault({ name: "Steppenvolk", counts: { DfL: 1 } }),
+        ],
+        "Bauernplättchen" : [
+          itemDefault({ name: "Bauer (männlich)", alt: ["männliches Bauernplättchen", "Holzarbeiter"], counts: { BiBo: 2, DlH: 3, DLvA: 2, GdK: 3, HaE: 1 }, images: { BiBo: { caption: "Bauernplättchen" }, DlH: { src: "Bilder/Bauer_maennlich_DlH.png", caption: "Bauernplättchen" }, DLvA: { caption: "Bauernplättchen" }, GdK: { src: noImage, caption: "Bauer" }, HaE: { src: noImage, caption: "Bauer" } } }),
+          itemDefault({ name: "Bauer (weiblich)", alt: ["weibliches Bauernplättchen"], counts: { BiBo: 2, DlH: 3, DLvA: 2, GdK: 1, HaE: 1 }, images: { BiBo: { caption: "Bauernplättchen" }, DlH: { src: "Bilder/Bauer_weiblich_DlH.png", caption: "Bauernplättchen" }, DLvA: { caption: "Bauernplättchen" }, GdK: { src: noImage, caption: "Bauer" }, HaE: { src: noImage, caption: "Bauer" } } }),
+        ],
+        "Iquarplättchen" : [
+          itemDefault({ name: "Iquar (männlich)", alt: ["männliches Iquarplättchen"], counts: { DeK: 1, DfL: 1 }, images: { DeK: { src: noImage, caption: "Iquar" }, DfL: { caption: "Iquar / Schildplättchen" } } }),
+          itemDefault({ name: "Iquar (weiblich)", alt: ["weibliches Iquarplättchen"], counts: { DeK: 1, DfL: 1 }, images: { DeK: { src: noImage, caption: "Iquar" }, DfL: { caption: "Iquar / Schildplättchen" } } }),
+        ],
+      },
+    },
+    "Beuteplättchen" : {
+      "" : [
+        itemBootyToken({ counts: { AdH: 1 } }, "Doppelaxt"),
+        itemBootyToken({ counts: { AdH: 1 } }, "Fass"),
+        itemBootyToken({ counts: { AdH: 1 } }, "Federkleid"),
+        itemBootyToken({ counts: { AdH: 1 } }, "Giftpfeile"),
+        itemBootyToken({ counts: { AdH: 1 } }, "Hammer"),
+        itemBootyToken({ counts: { AdH: 1 } }, "Heilstab"),
+        itemBootyToken({ counts: { AdH: 1 } }, "Irrlicht"),
+        itemBootyToken({ counts: { AdH: 1 } }, "Kurzbogen"),
+        itemBootyToken({ counts: { AdH: 1 } }, "Laute"),
+        itemBootyToken({ counts: { AdH: 1 } }, "Lied der Eile"),
+        itemBootyToken({ counts: { AdH: 1 } }, "Lied der Handelskunst"),
+        itemBootyToken({ counts: { AdH: 1 } }, "Lied der Kameradschaft"),
+        itemBootyToken({ counts: { AdH: 1 } }, "Lied der Motivation"),
+        itemBootyToken({ counts: { AdH: 1 } }, "Lied der Unterstützung"),
+        itemBootyToken({ counts: { AdH: 1 } }, "Lied des Wassers"),
+        itemBootyToken({ counts: { AdH: 1 } }, "Magische Armschiene"),
+        itemBootyToken({ counts: { AdH: 1 } }, "Metkrug"),
+        itemBootyToken({ counts: { AdH: 1 } }, "Pferd"),
+        itemBootyToken({ counts: { AdH: 1 } }, "Rucksack"),
+        itemBootyToken({ counts: { AdH: 1 } }, "Ruhmreiche Rüstung"),
+        itemBootyToken({ counts: { AdH: 1 } }, "Säbel"),
+        itemBootyToken({ counts: { AdH: 1 } }, "Schwert"),
+        itemBootyToken({ counts: { AdH: 1 } }, "Tarnkappe"),
+        itemBootyToken({ counts: { AdH: 1 } }, "Tarnmantel"),
+        itemBootyToken({ counts: { AdH: 1 } }, "Triumphstiefel"),
+        itemBootyToken({ counts: { AdH: 1 } }, "Verjüngungstrank"),
+        itemBootyToken({ counts: { AdH: 1 } }, "Verteidigungshelm"),
+        itemBootyToken({ counts: { AdH: 1 } }, "Wurfmesser"),
+        itemBootyToken({ counts: { AdH: 1 } }, "Zauberbuch"),
+        itemBootyToken({ counts: { AdH: 1 } }, "Zauberhut"),
+        itemBootyToken({ counts: { AdH: 1 } }, "Zielvisier"),
+        itemBootyToken({ counts: { AdH: 1 } }, "Zorn des Phoenix"),
+      ],
+      "Beuteplättchen „Niete!“" : [
+        itemBootyToken({ counts: { AdH: 1 } }, "Knopf und Fussel"),
+        itemBootyToken({ counts: { AdH: 1 } }, "Trollhaare"),
+        itemBootyToken({ counts: { AdH: 1 } }, "Wardrak Schuppen"),
+      ],
+    },
+    "Bewegungsplättchen" : [
+        itemDefault({ name: "Bewegungsplättchen „Gor“", counts: { DZ: 1 } }),
+        itemDefault({ name: "Bewegungsplättchen „Skral“", counts: { DZ: 1 } }),
+        itemDefault({ name: "Bewegungsplättchen „Troll“", counts: { DZ: 1 } }),
+        itemDefault({ name: "Bewegungsplättchen „Wardrak“", counts: { DZ: 2 } }),
+    ],
+    "Boot etc." : [
+      itemDefault({ name: "Boot", counts: { DZ: 1 } }),
+      itemDefault({ name: "Floß", counts: { AG: 1 } }),
+    ],
+    "Brunnenplättchen etc." : {
+      "" : [
+        itemDefault({ name: "Brunnen", alt: ["Brunnenplättchen"], counts: { AJ: 3, AoH: 3, BiBo: 4, DfL: 4, DLvA: 4, GdK: 4 }, images: { AJ: { src: "Bilder/Brunnen_AJ.png", caption: "Brunnenplättchen" }, AoH: { src: noImage }, BiBo: { caption: "Brunnenplättchen" }, DfL: { src: "Bilder/Brunnen_DfL.png", caption: "Brunnenplättchen" }, DLvA: { caption: "Brunnenplättchen" }, GdK: { src: noImage } } }),
+        itemDefault({ name: "Feuer", alt: ["Feuerplättchen"], counts: { DeK: 6, HaE: NaN }, images: { DeK: { src: noImage }, HaE: { src: noImage } } }),
+        itemDefault({ name: "Zwergenbrunnen", alt: ["Zwergenbrunnenplättchen"], counts: { AJGadS: 1 }, images: { AJGadS: { src: "Bilder/Zwergenbrunnenplaettchen.png", caption: "Zwergenbrunnenplättchen" } } }),
+      ],
+      "Nord-Brunnen" : [
+        itemDefault({ name: "Nord-Brunnen „Willenspunkte +3, 1 Gold“", counts: { DRidN: 1 }, images: { DRidN: { caption: "Nord-Brunnen" } } }),
+        itemDefault({ name: "Nord-Brunnen „Willenspunkte +3, Trinkschlauch“", counts: { DRidN: 1 }, images: { DRidN: { caption: "Nord-Brunnen" } } }),
+        itemDefault({ name: "Nord-Brunnen „Willenspunkte +6“", counts: { DRidN: 1 }, images: { DRidN: { caption: "Nord-Brunnen" } } }),
+      ],
+      "Quelle" : [
+        itemDefault({ name: "Quelle „Stärkepunkte +1“", counts: { AG: 1 }, images: { AG: { caption: "Quelle" } } }),
+        itemDefault({ name: "Quelle „Willenspunkte +1, 2 Gold“", counts: { AG: 1 }, images: { AG: { caption: "Quelle" } } }),
+        itemDefault({ name: "Quelle „Willenspunkte +2“", alt: ["Quellenplättchen"], counts: { DlH: 1 }, images: { DlH: { src: "Bilder/Quellenplaettchen.png", caption: "Quellenplättchen" } } }),
+        itemDefault({ name: "Quelle „Willenspunkte +3“", alt: ["Quellenplättchen"], counts: { DlH: 1 }, images: { DlH: { src: "Bilder/Quellenplaettchen.png", caption: "Quellenplättchen" } } }),
+        itemDefault({ name: "Quelle „Willenspunkte +4“", alt: ["Quellenplättchen"], counts: { DlH: 1 }, images: { DlH: { src: "Bilder/Quellenplaettchen.png", caption: "Quellenplättchen" } } }),
+        itemDefault({ name: "Quelle „Willenspunkte +4, 1 Gold“", counts: { AG: 1 }, images: { AG: { caption: "Quelle" } } }),
+      ],
+    },
+    "Figurenplättchen" : {
+      "" : [
+        itemDefault({ name: "Flederfuchs", alt: ["Flederfuchsplättchen", "Flaps"], counts: { AJGadS: 1 }, images: { AJGadS: { src: "Bilder/Flederfuchsplaettchen.png", caption: "Flederfuchsplättchen" } } }),
+        itemDefault({ name: "Wassergeist", alt: ["Vara"], counts: { BdR: 1 }, images: { BdR: { src: "Bilder/Wassergeist_BdR.png", caption: "Varas Wassergeist" } } }),
+      ],
+      "Gegnerplättchen" : {
+        "" : [
+          itemDefault({ name: "Fluggor-Nest", counts: { GdK: 1 }, images: { GdK: { src: "Bilder/App/Fluggor-Nest.png" } } }),
+          itemDefault({ name: "Geröll", counts: { GdK: 4 }, images: { GdK: { src: "Bilder/App/Geroell.png" } } }),
+          itemDefault({ name: "Takota", counts: { DeK: 1 }, images: { DeK: { src: noImage } } }),
+          itemDefault({ name: "Wassermonster", alt: ["Irlok"], counts: { StSch: 1 } }),
+        ],
+        "Maasavi" : [
+          itemDefault({ name: "Maasavi (10)", counts: { AG: 1 }, images: { AG: { src: "Bilder/Maasavi.png", caption: "Maasavi" } } }),
+          itemDefault({ name: "Maasavi (20)", counts: { AG: 1 }, images: { AG: { src: "Bilder/Maasavi.png", caption: "Maasavi" } } }),
+          itemDefault({ name: "Maasavi (31)", counts: { AG: 1 }, images: { AG: { src: "Bilder/Maasavi.png", caption: "Maasavi" } } }),
+          itemDefault({ name: "Maasavi (32)", counts: { AG: 1 }, images: { AG: { src: "Bilder/Maasavi.png", caption: "Maasavi" } } }),
+          itemDefault({ name: "Maasavi (36)", counts: { AG: 1 }, images: { AG: { src: "Bilder/Maasavi.png", caption: "Maasavi" } } }),
+          itemDefault({ name: "Maasavi (41)", counts: { AG: 1 }, images: { AG: { src: "Bilder/Maasavi.png", caption: "Maasavi" } } }),
+          itemDefault({ name: "Maasavi (44)", counts: { AG: 1 }, images: { AG: { src: "Bilder/Maasavi.png", caption: "Maasavi" } } }),
+          itemDefault({ name: "Maasavi (49)", counts: { AG: 1 }, images: { AG: { src: "Bilder/Maasavi.png", caption: "Maasavi" } } }),
+          itemDefault({ name: "Maasavi (54)", counts: { AG: 1 }, images: { AG: { src: "Bilder/Maasavi.png", caption: "Maasavi" } } }),
+        ],
+        "Oktohan-Plättchen" : [
+          itemDefault({ name: "Oktohan-Plättchen (3 Würfel)", counts: { DRidN: 1 }, images: { DRidN: { src: noImage, caption: "Oktohan-Plättchen" } } }),
+          itemDefault({ name: "Oktohan-Plättchen (4 Würfel)", counts: { DRidN: 1 }, images: { DRidN: { src: noImage, caption: "Oktohan-Plättchen" } } }),
+          itemDefault({ name: "Oktohan-Plättchen (5 Würfel)", counts: { DRidN: 1 }, images: { DRidN: { src: "Bilder/Oktohan_5.png", caption: "Oktohan-Plättchen" } } }),
+        ],
+        "Sporne-Plättchen" : [
+          itemDefault({ name: "Sporne-Plättchen (0) „Apfelnüsse“", alt: ["Sporne"], counts: { DH: 2 }, images: { DH: { src: "Bilder/Sporne-Plaettchen.png", caption: "Sporne-Plättchen" } } }),
+          itemDefault({ name: "Sporne-Plättchen (5) „Apfelnüsse“", alt: ["Sporne"], counts: { DH: 3 }, images: { DH: { src: "Bilder/Sporne-Plaettchen.png", caption: "Sporne-Plättchen" } } }),
+          itemDefault({ name: "Sporne-Plättchen (5) „1 Gold“", alt: ["Sporne"], counts: { DfL: 3 }, images: { DfL: { src: "Bilder/Sporneplaettchen.png", caption: "Sporneplättchen" } } }),
+          itemDefault({ name: "Sporne-Plättchen (5) „Stärkepunkte +1“", alt: ["Sporne"], counts: { DfL: 3 }, images: { DfL: { src: "Bilder/Sporneplaettchen.png", caption: "Sporneplättchen" } } }),
+          itemDefault({ name: "Sporne-Plättchen (5) „Willenspunkte +4“", alt: ["Sporne"], counts: { DfL: 3 }, images: { DfL: { src: "Bilder/Sporneplaettchen.png", caption: "Sporneplättchen" } } }),
+          itemDefault({ name: "Sporne-Plättchen (7) „Apfelnüsse“", alt: ["Sporne"], counts: { DH: 1 }, images: { DH: { src: "Bilder/Sporne-Plaettchen.png", caption: "Sporne-Plättchen" } } }),
+        ],
+      },
+    },
+    "Gegenstand etc." : {
+      "" : [
+          itemDefault({ name: "Armreif", counts: { DH: 1 } }),
+          itemDefault({ name: "Eisblitz", counts: { MH: 8 } }),
+          itemDefault({ name: "Fackel", alt: ["Fackelplättchen"], counts: { AJ: 3 }, images: { AJ: { src: "Bilder/Fackelplaettchen.png", caption: "Fackelplättchen" } } }),
+          itemDefault({ name: "Krams Axt", counts: { BdR: 1 }, images: { BdR: { src: "Bilder/Axt_BdR.png" } } }),
+      ],
+      "besonderer Gegenstand" : {
+        "" : [
+          itemDefault({ name: "Horn", counts: { BiBo: 1, NH: 1 }, images: { BiBo: { src: "Bilder/Fenns_Horn_BiBo.png" }, NH: { src: "Bilder/Fenns_Horn.png" } } }),
+          itemDefault({ id: "messer-fenn", name: "Messer", counts: { BiBo: 1, NH: 1 }, images: { BiBo: { src: "Bilder/Fenns_Messer_BiBo.png" }, NH: { src: "Bilder/Fenns_Messer.png" } } }),
+          itemDefault({ name: "Rabe", alt: ["Rabenplättchen", "Morar"], counts: { BiBo: 1, BMAJ: 2, NH: 1 }, images: { BiBo: { src: "Bilder/Fenns_Rabe_BiBo.png" }, BMAJ: { src: "Bilder/Rabenplaettchen.png", caption: "Rabenplättchen" }, NH: { src: "Bilder/Fenns_Rabe.png" } } }),
+        ],
+        "Zauberbuch" : {
+          "" : [
+            itemDefault({ name: "Zauberbuch „Heilzauber“", counts: { AoH: 1, DlH: 1 }, images: { AoH: { src: noImage }, DlH: { src: "Bilder/Zauberbuecher.png", caption: "Zauberbücher" } } }),
+            itemDefault({ name: "Zauberbuch „Lichtzauber“", counts: { AoH: 1, BdR: 1, DlH: 1 }, images: { AoH: { src: noImage }, BdR: { caption: "Zauberbuch" }, DlH: { src: "Bilder/Zauberbuecher.png", caption: "Zauberbücher" } } }),
+            itemDefault({ name: "Zauberbuch „Portalzauber“", counts: { BdR: 1, DlH: 1 }, images: { BdR: { caption: "Zauberbuch" }, DlH: { src: "Bilder/Zauberbuecher.png", caption: "Zauberbücher" } } }),
+            itemDefault({ name: "Zauberbuch „Windzauber“", counts: { AoH: 1 }, images: { AoH: { src: noImage } } }),
+          ],
+          "Zauberbuch „Kampfzauber“" : [
+            itemDefault({ name: "Zauberbuch „Kampfzauber“ (1)", counts: { BdR: 1 }, images: { BdR: { caption: "Zauberbuch" } } }),
+            itemDefault({ name: "Zauberbuch „Kampfzauber“ (2)", counts: { BdR: 1 }, images: { BdR: { caption: "Zauberbuch" } } }),
+            itemDefault({ name: "Zauberbuch „Kampfzauber“ (3)", alt: ["Zauberbuch „Fernkampfzauber“"], counts: { BdR: 1 }, images: { BdR: { caption: "Zauberbuch" } } }),
+            itemDefault({ name: "Zauberbuch „Kampfzauber“ (5)", counts: { BdR: 1 }, images: { BdR: { caption: "Zauberbuch" } } }),
+          ],
+        },
+      },
+      "Feuerzauber" : [
+          itemDefault({ name: "Feuerzauber „Bannfeuer“", counts: { DfL: 1 } }),
+          itemDefault({ name: "Feuerzauber „Feuerstoß“", counts: { DfL: 1 } }),
+          itemDefault({ name: "Feuerzauber „Leuchtfeuer“", counts: { DfL: 1 } }),
+      ],
+      "Gold etc." : {
+        "" : [
+          itemDefault({ name: "Apfelnüsse", alt: ["Ausrüstungsgegenstand"], counts: { DH: 6, DlH: 7 }, images: { DH: { src: "Bilder/Apfelnuesse_DH.png" } } }),
+          itemDefault({ name: "Artefakt-Teil", counts: { DfL: 3 }, images: { DfL : { src: "Bilder/Artefakt-Teile.png", caption: "Artefakt-Teile" } } }),
+          itemDefault({ name: "Casamatuc", counts: { AG: 1 } }),
+          itemDefault({ name: "Golemkern", counts: { DZ: 3 }, images: { DZ: { src: "Bilder/Golemkerne.png", caption: "Golemkerne" } } }),
+          itemDefault({ name: "Kräuter", counts: { DfL: 2 } }),
+          itemDefault({ name: "Mondbeeren", counts: { MH: 6 } }),
+          itemDefault({ name: "Rietgrasblüte", counts: { AG: 5 } }),
+          itemDefault({ name: "Schlüssel", counts: { StSch: 1 } }),
+          itemDefault({ name: "schwarzer Kristall", alt: ["Drachenauge"], counts: { DRidN: 1 }, images: { DRidN: { caption: "schwarzer Kristall (Drachenauge)" } } }),
+          itemDefault({ name: "Sternkraut", alt: ["Ausrüstungsgegenstand"], counts: { DlH: 6 } }),
+          itemDefault({ name: "Takuri-Feder", counts: { MH: 2 }, images: { MH: { src: noImage } } }),
+          itemDefault({ name: "Zeichnung", counts: { DfL: 1 } }),
+        ],
+        "Drachenknochen" : [
+          itemDefault({ name: "Drachenknochen (1)", counts: { DZ: 2 }, images: { DZ : { caption: "Drachenknochen" } } }),
+          itemDefault({ name: "Drachenknochen (2)", counts: { DZ: 1 }, images: { DZ : { caption: "Drachenknochen" } } }),
+        ],
+        "Edelstein" : [
+          itemDefault({ name: "Edelstein (2)", alt: ["grüner Edelstein"], counts: { BiBo: 5, DeK: 3, DlH: 1, DLvA: 5 }, images: { BiBo: { caption: "Edelstein" }, DeK: { src: noImage }, DlH: { src: "Bilder/Edelsteine_DlH.png", caption: "Edelsteine" }, DLvA: { caption: "Edelstein" } } }),
+          itemDefault({ name: "Edelstein (3)", alt: ["violetter Edelstein"], counts: { DlH: 1 }, images: { DlH: { src: "Bilder/Edelsteine_DlH.png", caption: "Edelsteine" } } }),
+          itemDefault({ name: "Edelstein (4)", alt: ["blauer Edelstein"], counts: { BiBo: 5, DlH: 1, DLvA: 5 }, images: { BiBo: { caption: "Edelstein" }, DlH: { src: "Bilder/Edelsteine_DlH.png", caption: "Edelsteine" }, DLvA: { caption: "Edelstein" } } }),
+          itemDefault({ name: "Edelstein (6)", alt: ["roter Edelstein"], counts: { BiBo: 1, DlH: 1, DLvA: 1 }, images: { BiBo: { caption: "Edelstein" }, DlH: { src: "Bilder/Edelsteine_DlH.png", caption: "Edelsteine" }, DLvA: { caption: "Edelstein" } } }),
+        ],
+        "Gold" : [
+          itemDefault({ name: "1 Gold", counts: { BiBo: 12, DfL: 8, DLvA: 12, GdK: NaN, HaE: NaN }, images: { BiBo: { caption: "Gold" }, DfL: { src: "Bilder/1_Gold_DfL.png", caption: "Gold" }, DLvA : { caption: "Gold" }, GdK: { src: noImage, caption: "Gold" }, HaE: { src: noImage, caption: "Gold" } } }),
+          itemDefault({ name: "2 Gold", counts: { BiBo: 10, DfL: 6, DLvA: 10 }, images: { BiBo: { caption: "Gold" }, DfL: { src: "Bilder/2_Gold_DfL.png", caption: "Gold" }, DLvA : { caption: "Gold" } } }),
+          itemDefault({ name: "5 Gold", counts: { BiBo: 4, DfL: 2, DLvA: 4 }, images: { BiBo: { caption: "Gold" }, DfL: { src: "Bilder/5_Gold_DfL.png", caption: "Gold" }, DLvA : { caption: "Gold" } } }),
+        ],
+        "Muschel" : [
+          itemDefault({ name: "Muschel (0)", counts: { DRidN: 1 }, images: { DRidN : { caption: "Muschel" } } }),
+          itemDefault({ name: "Muschel (1)", counts: { DRidN: 1 }, images: { DRidN : { caption: "Muschel" } } }),
+          itemDefault({ name: "Muschel (2)", counts: { DRidN: 2 }, images: { DRidN : { caption: "Muschel" } } }),
+        ],
+        "Pilze" : [
+          itemDefault({ name: "Pilze (1)", alt: ["Waldpilze (1)"], counts: { StSch: 2 }, images: { StSch : { src: "Bilder/Waldpilze.png", caption: "Waldpilze" } } }),
+          itemDefault({ name: "Pilze (2)", alt: ["Waldpilze (2)"], counts: { StSch: 1 }, images: { StSch : { src: "Bilder/Waldpilze.png", caption: "Waldpilze" } } }),
+          itemDefault({ name: "Pilze „Willenspunkte -3“", counts: { DfL: 1 }, images: { DfL : { src: "Bilder/Pilze.png", caption: "Pilze" } } }),
+          itemDefault({ name: "Pilze „Willenspunkte +2“", counts: { DfL: 1 }, images: { DfL : { src: "Bilder/Pilze.png", caption: "Pilze" } } }),
+          itemDefault({ name: "Pilze „Willenspunkte +4“", counts: { DfL: 1 }, images: { DfL : { src: "Bilder/Pilze.png", caption: "Pilze" } } }),
+        ],
+        "Steppenkraut" : [
+          itemDefault({ name: "Blaubachbeeren", counts: { DeK: 2 }, images: { DeK: { src: noImage } } }),
+          itemDefault({ name: "rotes Blutkraut", counts: { DeK: 2 }, images: { DeK: { src: noImage } } }),
+          itemDefault({ name: "schwarze Nachtstacheln", counts: { DeK: 1 }, images: { DeK: { src: noImage } } }),
+          itemDefault({ name: "weiße Warzwurzeln", counts: { DeK: 2 }, images: { DeK: { src: noImage } } }),
+        ],
+      },
+      "großer Gegenstand" : [
+        //itemDefault({ name: "Arpachen-Königin (bewusstlos)", counts: { GdK: 1 }, images: { GdK: { src: "Bilder/App/Arpachen-Koenigin_bewusstlos.png" } } }),
+        itemDefault({ name: "Askimar-Klinge", alt: ["Ausrüstungsgegenstand"], counts: { DeK: 2 }, images: { DeK: { src: noImage } } }),
+        itemDefault({ name: "Bogen", alt: ["Ausrüstungsgegenstand"], counts: { BiBo: 3, DfL: 2, DLvA: 3, GdK: NaN, HaE: NaN }, images: { DfL: { src: "Bilder/Bogen_DfL.png" }, GdK: { src: noImage }, HaE: { src: noImage } } }),
+        itemDefault({ name: "Bruderschild", alt: ["Mächtiger Schild"], counts: { BiBo: 1, DlH: 1, NH: 1 }, images: { BiBo: { src: "Bilder/Bruderschild_BiBo.png" }, DlH: { src: "Bilder/Bruderschild_DlH.png" } } }),
+        itemDefault({ name: "Carlion", alt: ["Eisschwert", "Ausrüstungsgegenstand"], counts: { DeK: 1 }, images: { DeK: { src: noImage } } }),
+        itemDefault({ name: "Doppelaxt", counts: { AdH: 2 } }),
+        itemDefault({ name: "Eule", alt: ["Gabe der Schildzwerge"], counts: { DZ: 1 } }),
+        itemDefault({ name: "Fackel", alt: ["Fackel von Cavern", "Gabe der Andori"], counts: { HaE: 3, StSch: 1 }, images: { HaE: { src: noImage } } }),
+        itemDefault({ name: "Falke", alt: ["Ausrüstungsgegenstand"], counts: { BiBo: 2, DeK: 1, DfL: 1, DlH: 1, DLvA: 2, GdK: NaN, HaE: NaN }, images: { DeK: { src: noImage }, DfL: { src: "Bilder/Falke_DfL.png" }, DlH: { src: "Bilder/Falke_DlH.png" }, GdK: { src: noImage }, HaE: { src: noImage } } }),
+        itemDefault({ name: "Fass", counts: { DRidN: 3 } }),
+        itemDefault({ name: "Feuerschild", alt: ["Mächtiger Schild"], counts: { DlH: 1 }}),
+        itemDefault({ name: "Flammenschwert", alt: ["Varlion", "Magische Waffe"], counts: { AoH: 1, DRidN: 1 }, images: { AoH: { src: noImage, caption: "Schwert" }, DRidN: { caption: "Schwert" } } }),
+        itemDefault({ name: "Hammer", counts: { AdH: 2 } }),
+        itemDefault({ name: "Hornfalke", alt: ["Gabe der Andori"], counts: { StSch: 1 } }),
+        itemDefault({ name: "Kampfaxt", counts: { BB: 1, BiBo: 1 }, images: { BB: { src: noImage } } }),
+        itemDefault({ name: "Laute", counts: { AdH: 3 } }),
+        itemDefault({ name: "Roteisenschild", alt: ["Gabe der Schildzwerge"], counts: { DZ: 1 } }),
+        itemDefault({ name: "Rucksack", counts: { AdH: 3, BB: 1, BiBo: 1 }, images: { AdH: { src: "Bilder/Rucksack_AdH.png" }, BB: { src: noImage } } }),
+        itemDefault({ name: "Säbel", counts: { AdH: 2 } }),
+        itemDefault({ name: "Schattenklinge", alt: ["Ausrüstungsgegenstand"], counts: { DfL: 1 } }),
+        itemDefault({ name: "Schild", alt: ["Ausrüstungsgegenstand"], counts: { BiBo: 4, DLvA: 4, GdK: NaN, HaE: NaN }, images: { GdK: { src: noImage }, HaE: { src: noImage } } }),
+        itemDefault({ name: "Schlange", counts: { AG: 1 } }),
+        itemDefault({ name: "Schwert", counts: { AdH: 2 } }),
+        itemDefault({ name: "Sternenschild", alt: ["Mächtiger Schild"], counts: { DlH: 1, StSch: 1 }, images: { DlH: { src: "Bilder/Sternenschild_DlH.png" } } }),
+        itemDefault({ name: "Sturmschild", alt: ["Mächtiger Schild"], counts: { DlH: 1, DRidN: 1 }, images: { DlH: { src: "Bilder/Sturmschild_DlH.png" } } }),
+        itemDefault({ name: "Takuri-Spiegel", alt: ["Schatz der Tulgori"], counts: { AG: 1 } }),
+        itemDefault({ name: "Zauberbuch", counts: { AdH: 3 } }),
+        itemDefault({ name: "Zwergenseil", counts: { BB: 1, BiBo: 1 }, images: { BB: { src: noImage } } }),
+      ],
+      "Helm etc." : [
+        itemDefault({ name: "Greifenkrone", counts: { DfL: 1 } }),
+        itemDefault({ name: "Helm", alt: ["Ausrüstungsgegenstand"], counts: { BiBo: 3, DlH: 2, DLvA: 3, GdK: NaN, HaE: NaN }, images: { DlH: { src: "Bilder/Helm_DlH.png" }, GdK: { src: noImage }, HaE: { src: noImage } } }),
+        itemDefault({ name: "Kapuze", alt: ["Ausrüstungsgegenstand"], counts: { DlH: 1 } }),
+        itemDefault({ name: "Knochenhelm", counts: { AG: 1 } }),
+        itemDefault({ name: "Reiterhelm", alt: ["Ausrüstungsgegenstand"], counts: { DeK: 2 }, images: { DeK: { src: noImage } } }),
+        itemDefault({ name: "Rietgraskrone", counts: { DlH: 1 } }),
+        itemDefault({ name: "Runenhelm", counts: { MH: 1 }, images: { MH: { src: noImage } } }),
+        itemDefault({ name: "Schildkrone", counts: { DZ: 1 } }),
+        itemDefault({ name: "Tarnkappe", counts: { AdH: 2 } }),
+        itemDefault({ name: "Varatans Helm", alt: ["Varatans Helm der Macht", "Magische Waffe"], counts: { DRidN: 1 }, images: { DRidN: { caption: "Helm" } } }),
+        itemDefault({ name: "Verteidigungshelm", counts: { AdH: 2 } }),
+        itemDefault({ name: "Zauberhut", counts: { AdH: 3 } }),
+        itemDefault({ name: "Zielvisier", counts: { AdH: 3 } }),
+      ],
+      "Holzstamm etc." : {
+        "" : [
+          itemDefault({ name: "Eisen", counts: { DRidN: 2 } }),
+        ],
+        "Holzstamm" : [
+          itemDefault({ name: "Holzstamm (2)", alt: ["Holz", "Baumstamm"], counts: { AG: 6, DfL: 2, DlH: 2, DRidN: 2, StSch: 2 }, images: { AG: { src: "Bilder/Baumstamm_2.png", caption: "Holzstamm" }, DfL: { src: "Bilder/Holzstaemme_DfL.png", caption: "Holzstämme" }, DlH: { src: "Bilder/Holzstamm_2.png", caption: "Holzstamm" }, DRidN: { src: "Bilder/Holz.png", caption: "Holz" }, StSch: { src: "Bilder/Baumstaemme.png", caption: "Baumstämme" } } }),
+          itemDefault({ name: "Holzstamm (4)", alt: ["Holz", "Baumstamm"], counts: { AG: 2, DfL: 2, DlH: 2, StSch: 2 }, images: { AG: { src: "Bilder/Baumstamm_4.png", caption: "Holzstamm" }, DfL: { src: "Bilder/Holzstaemme_DfL.png", caption: "Holzstämme" }, DlH: { src: "Bilder/Holzstamm_4.png", caption: "Holzstamm" }, StSch: { src: "Bilder/Baumstaemme.png", caption: "Baumstämme" } } }),
+          itemDefault({ name: "Holzstamm (6)", alt: ["Holz", "Baumstamm"], counts: { DfL: 1, StSch: 1 }, images: { DfL: { src: "Bilder/Holzstaemme_DfL.png", caption: "Holzstämme" }, StSch: { src: "Bilder/Baumstaemme.png", caption: "Baumstämme" } } }),
+        ],
+      },
+      "kleiner Gegenstand (einfach)" : {
+        "" : [
+          itemDefault({ name: "Axt", alt: ["Alte Waffe"], counts: { DlH: 1 } }),
+          itemDefault({ name: "Brennholz", alt: ["Ausrüstungsgegenstand"], counts: { DeK: 3, HaE: NaN }, images: { DeK: { src: noImage }, HaE: { src: noImage } } }),
+          itemDefault({ name: "Brot", counts: { BB: 2, BiBo: 2 }, images: { BB: { src: noImage } } }),
+          itemDefault({ name: "Drachenfass Rachenputzer", counts: { GdK: 3 }, images: { GdK: { src: noImage } } }),
+          itemDefault({ name: "Drachenrelikt", counts: { GdK: 4 }, images: { GdK: { src: noImage } } }),
+          itemDefault({ name: "Eiserner Handschuh", alt: ["Alte Waffe"], counts: { DlH: 1 } }),
+          itemDefault({ id: "fass-adh", name: "Fass", counts: { AdH: 4 }, images: { AdH: { src: "Bilder/Fass_AdH.png" } } }),
+          itemDefault({ name: "Fernrohr", alt: ["Ausrüstungsgegenstand"], counts: { BiBo: 2, DeK: 2, DfL: 2, DlH: 1, DLvA: 2, GdK: NaN, HaE: NaN }, images: { DeK: { src: noImage }, DfL: { src: "Bilder/Fernrohr_DfL.png" }, DlH: { src: "Bilder/Fernrohr_DlH.png" }, GdK: { src: noImage }, HaE: { src: noImage } } }),
+          itemDefault({ name: "Flöte", alt: ["Andorische Flöte", "Gabe der Andori"], counts: { StSch: 1 } }),
+          itemDefault({ name: "Gift", counts: { BiBo: 1, DLvA: 1 } }),
+          itemDefault({ name: "Giftpfeile", counts: { AdH: 2 } }),
+          itemDefault({ name: "Heilstab", counts: { AdH: 3 } }),
+          itemDefault({ name: "Holz", counts: { GdK: 3 }, images: { GdK: { src: noImage } } }),
+          itemDefault({ name: "Horn", counts: { AoH: 1 }, images: { AoH: { src: noImage } } }),
+          itemDefault({ name: "Irrlicht", counts: { AdH: 3 } }),
+          itemDefault({ name: "Kessel", alt: ["Kessel aus Zwergenstahl"], counts: { DlH: 1, GdK: 1 }, images: { GdK: { src: noImage } } }),
+          itemDefault({ name: "Kletterseil", counts: { GdK: 3 }, images: { GdK: { src: noImage } } }),
+          itemDefault({ name: "Knochenflöte", alt: ["Knochenflöte von Korn"], counts: { GdK: 1 }, images: { GdK: { src: noImage } } }),
+          itemDefault({ name: "Kompass", alt: ["hadrischer Kompass", "Gabe des Nordens"], counts: { DRidN: 1 } }),
+          itemDefault({ name: "Kraft des roten Mondes", alt: ["Schatz der Tulgori"], counts: { AG: 1 } }),
+          itemDefault({ name: "Krallenflechte", counts: { GdK: 1 }, images: { GdK: { src: noImage } } }),
+          itemDefault({ name: "Küstenlavendel", counts: { GdK: 1 }, images: { GdK: { src: noImage } } }),
+          itemDefault({ name: "Lagerfeuer", alt: ["Lagerfeuerplättchen"], counts: { DZ: 1 }, images: { DZ: { src: "Bilder/Lagerfeuerplaettchen.png", caption: "Lagerfeuerplättchen" } } }),
+          itemDefault({ name: "Magische Armschiene", counts: { AdH: 3 } }),
+          itemDefault({ id: "messer-bb", name: "Messer", counts: { BB: 2, BiBo: 2 }, images: { BB: { src: noImage }, BiBo: { src: "Bilder/Messer_BiBo.png" } } }),
+          itemDefault({ name: "Messer", alt: ["Alte Waffe"], counts: { DlH: 1 } }),
+          itemDefault({ name: "Metkrug", counts: { AdH: 3 } }),
+          itemDefault({ name: "Nixenstaub", alt: ["Gabe des Nordens"], counts: { DRidN: 1 } }),
+          itemDefault({ name: "Phiole", counts: { GdK: 3 }, images: { GdK: { src: noImage } } }),
+          itemDefault({ name: "Reparaturset", alt: ["Reparaturset für die Hängebrücke"], counts: { GdK: 1 }, images: { GdK: { src: noImage } } }),
+          itemDefault({ name: "Ruinengeist", counts: { DfL: 2 } }),
+          itemDefault({ name: "Sand der Temm", counts: { AG: 2 } }),
+          itemDefault({ name: "Schleifstein", counts: { BB: 1, BiBo: 1 }, images: { BB: { src: noImage } } }),
+          itemDefault({ name: "Schmuckkette", counts: { DRidN: 1 } }),
+          itemDefault({ name: "Schwarzer Tölpling", counts: { GdK: 3 }, images: { GdK: { src: noImage } } }),
+          itemDefault({ name: "Schwertgriff", alt: ["Alte Waffe"], counts: { DlH: 1 } }),
+          itemDefault({ name: "Schwertklinge", alt: ["Alte Waffe"], counts: { DlH: 1 } }),
+          itemDefault({ name: "Spiegelscherben", counts: { MH: 1 } }),
+          itemDefault({ name: "Spornenetz", counts: { HaE: 3 }, images: { HaE: { src: noImage } } }),
+          itemDefault({ name: "Streifenmarder", alt: ["diebischer Streifenmarder", "Gabe des Nordens"], counts: { DRidN: 1 }, images: { DRidN: { caption: "Marder" } } }),
+          itemDefault({ name: "Stundenglas", alt: ["hadrisches Stundenglas", "Gabe der Andori"], counts: { DRidN: 1, StSch: 1 }, images: { StSch: { src: "Bilder/Stundenglas_StSch.png" } } }),
+          itemDefault({ name: "Trank der Hexe", alt: ["Ausrüstungsgegenstand"], counts: { BiBo: 5, DlH: 3, DLvA: 5 }, images: { DlH: { src: "Bilder/Trank_der_Hexe_DlH.png" } } }),
+          itemDefault({ name: "Trank der Stärke", alt: ["Ausrüstungsgegenstand"], counts: { GdK: NaN }, images: { GdK: { src: noImage } } }),
+          itemDefault({ name: "Trinkschlauch", alt: ["Ausrüstungsgegenstand"], counts: { AoH: 2, BiBo: 5, DeK: 5, DfL: 5, DlH: 3, DLvA: 5, GdK: NaN, HaE: NaN }, images: { AoH: { src: noImage }, DeK: { src: noImage }, DfL: { src: "Bilder/Trinkschlauch_DfL.png" }, DlH: { src: "Bilder/Trinkschlauch_DlH.png" }, GdK: { src: noImage }, HaE: { src: noImage } } }),
+          itemDefault({ name: "Triumphstiefel", counts: { AdH: 3 } }),
+          itemDefault({ name: "Truhe", alt: ["Silbertruhe"], counts: { DRidN: 1 } }),
+          itemDefault({ name: "tulgorische Steinflöte", counts: { MH: 1 } }),
+          itemDefault({ name: "tulgorischer Hüter der Zeit", alt: ["Schatz der Tulgori"], counts: { AG: 1 } }),
+          itemDefault({ name: "Verjüngungstrank", counts: { AdH: 3 } }),
+          itemDefault({ name: "Werkzeuge", counts: { AG: 4 } }),
+          itemDefault({ name: "Winterkraut", counts: { HaE: 1 }, images: { HaE: { src: noImage } } }),
+          itemDefault({ name: "Winterstein", counts: { DeK: 1 }, images: { DeK: { src: noImage } } }),
+          itemDefault({ id: "wurfmesser-adh", name: "Wurfmesser", counts: { AdH: 2 }, images: { AdH: { src: "Bilder/Wurfmesser_AdH.png" } } }),
+          itemDefault({ name: "Wurfmesser", alt: ["Ausrüstungsgegenstand"], counts: { DfL: 2 } }),
+          itemDefault({ name: "Zauberhutpilze", counts: { GdK: 1 }, images: { GdK: { src: noImage } } }),
+          itemDefault({ name: "Zwergenstiefel", alt: ["Gabe der Schildzwerge"], counts: { DZ: 1 } }),
+        ],
+        "Heilkraut" : [
+          itemDefault({ name: "Heilkraut (3)", counts: { BiBo: 1, DLvA: 1 }, images: { BiBo: { caption: "Heilkraut" }, DLvA: { caption: "Heilkraut" } } }),
+          itemDefault({ name: "Heilkraut (4)", counts: { BiBo: 2, DLvA: 2 }, images: { BiBo: { caption: "Heilkraut" }, DLvA: { caption: "Heilkraut" } } }),
+        ],
+        "Hoffnungsstein" : [
+          itemDefault({ name: "Hoffnungsstein „böses Ereignis abwehren“", counts: { DfL: 1 }, images: { DfL: { src: "Bilder/Hoffnungsstein.png", caption: "Hoffnungsstein" } } }),
+          itemDefault({ name: "Hoffnungsstein „Stärkepunkte +1“", counts: { DfL: 1 }, images: { DfL: { src: "Bilder/Hoffnungsstein.png", caption: "Hoffnungsstein" } } }),
+          itemDefault({ name: "Hoffnungsstein „Stärkepunktemarker verschieben“", counts: { DfL: 1 }, images: { DfL: { src: "Bilder/Hoffnungsstein.png", caption: "Hoffnungsstein" } } }),
+          itemDefault({ name: "Hoffnungsstein „Willenspunkte +3“", counts: { DfL: 1 }, images: { DfL: { src: "Bilder/Hoffnungsstein.png", caption: "Hoffnungsstein" } } }),
+        ],
+        "Humpen" : [
+          itemDefault({ name: "Humpen (1)", counts: { BB: "3*", BiBo: 1 }, images: { BB: { src: noImage, caption: "Humpen" }, BiBo: { src: "Bilder/Humpen.png", caption: "Humpen" } } }),
+          itemDefault({ name: "Humpen (2)", counts: { BB: "2*" }, images: { BB: { src: noImage, caption: "Humpen" } } }),
+          itemDefault({ name: "Humpen (3)", counts: { BB: "3*", BiBo: 1 }, images: { BB: { src: noImage, caption: "Humpen" }, BiBo: { src: "Bilder/Humpen.png", caption: "Humpen" } } }),
+        ],
+        "Lied" : [
+          itemDefault({ name: "Lied der Eile", counts: { AdH: 1 } }),
+          itemDefault({ name: "Lied der Handelskunst", counts: { AdH: 1 } }),
+          itemDefault({ name: "Lied der Kameradschaft", counts: { AdH: 1 } }),
+          itemDefault({ name: "Lied der Motivation", counts: { AdH: 1 } }),
+          itemDefault({ name: "Lied der Unterstützung", counts: { AdH: 1 } }),
+          itemDefault({ name: "Lied des Wassers", counts: { AdH: 1 } }),
+        ],
+        "Mera-Stein" : [
+          itemDefault({ name: "Mera-Stein (0)", counts: { AG: 2 }, images: { AG: { caption: "Mera-Stein" } } }),
+          itemDefault({ name: "Mera-Stein (+1)", counts: { AG: 1 }, images: { AG: { caption: "Mera-Stein" } } }),
+          itemDefault({ name: "Mera-Stein (+2)", counts: { AG: 1 }, images: { AG: { caption: "Mera-Stein" } } }),
+          itemDefault({ name: "Mera-Stein (+3)", counts: { AG: 1 }, images: { AG: { caption: "Mera-Stein" } } }),
+        ],
+        "Pergament" : [
+          itemDefault({ name: "Pergament", counts: { AoH: 1, GdK: 1 }, images: { AoH: { src: noImage, caption: "Aufgabe" }, GdK: { src: noImage, caption: "Melkarts Nachricht" } } }),
+          itemDefault({ name: "Pergament (7)", counts: { BiBo: 1, DLvA: 1 }, images: { BiBo: { src: "Bilder/Pergament.png", caption: "Pergament" }, DLvA: { src: "Bilder/Pergament.png", caption: "Pergament" } } }),
+          itemDefault({ name: "Pergament (8)", counts: { BiBo: 1, DLvA: 1 }, images: { BiBo: { src: "Bilder/Pergament.png", caption: "Pergament" }, DLvA: { src: "Bilder/Pergament.png", caption: "Pergament" } } }),
+          itemDefault({ name: "Pergament (10)", counts: { BiBo: 1, DLvA: 1 }, images: { BiBo: { src: "Bilder/Pergament.png", caption: "Pergament" }, DLvA: { src: "Bilder/Pergament.png", caption: "Pergament" } } }),
+          itemDefault({ name: "Pergament (11)", counts: { BiBo: 1, DLvA: 1 }, images: { BiBo: { src: "Bilder/Pergament.png", caption: "Pergament" }, DLvA: { src: "Bilder/Pergament.png", caption: "Pergament" } } }),
+          itemDefault({ name: "Pergament (14)", counts: { BiBo: 1, DLvA: 1 }, images: { BiBo: { src: "Bilder/Pergament.png", caption: "Pergament" }, DLvA: { src: "Bilder/Pergament.png", caption: "Pergament" } } }),
+          itemDefault({ name: "Pergament (17)", counts: { BiBo: 1, DLvA: 1 }, images: { BiBo: { src: "Bilder/Pergament.png", caption: "Pergament" }, DLvA: { src: "Bilder/Pergament.png", caption: "Pergament" } } }),
+        ],
+        "Roteisenstein" : [
+          itemDefault({ name: "Roteisenstein (4)", counts: { DZ: 1 }, images: { DZ: { caption: "Roteisenstein" } } }),
+          itemDefault({ name: "Roteisenstein (5)", counts: { DZ: 1 }, images: { DZ: { caption: "Roteisenstein" } } }),
+          itemDefault({ name: "Roteisenstein (6)", counts: { DZ: 1 }, images: { DZ: { caption: "Roteisenstein" } } }),
+          itemDefault({ name: "Roteisenstein (7)", counts: { DZ: 3 }, images: { DZ: { caption: "Roteisenstein" } } }),
+          itemDefault({ name: "Roteisenstein (8)", counts: { DZ: 1 }, images: { DZ: { caption: "Roteisenstein" } } }),
+          itemDefault({ name: "Roteisenstein (9)", counts: { DZ: 1 }, images: { DZ: { caption: "Roteisenstein" } } }),
+        ],
+        "Runenstein" : [
+          itemDefault({ name: "blauer Runenstein", counts: { BiBo: 2, DLvA: 2 }, images: { BiBo: { src: "Bilder/Runenstein_blau.png", caption: "Runenstein" }, DLvA: { src: "Bilder/Runenstein_blau.png", caption: "Runenstein" } } }),
+          itemDefault({ name: "gelber Runenstein", counts: { BiBo: 2, DLvA: 2 }, images: { BiBo: { src: "Bilder/Runenstein_gelb.png", caption: "Runenstein" }, DLvA: { src: "Bilder/Runenstein_gelb.png", caption: "Runenstein" } } }),
+          itemDefault({ name: "grüner Runenstein", counts: { BiBo: 2, DLvA: 2 }, images: { BiBo: { src: "Bilder/Runenstein_gruen.png", caption: "Runenstein" }, DLvA: { src: "Bilder/Runenstein_gruen.png", caption: "Runenstein" } } }),
+        ],
+        "Tafel" : [
+          itemDefault({ name: "Tafel „Greif“", alt: ["Tafel der drei Brüder"], counts: { DeK: 1 }, images: { DeK: { src: noImage } } }),
+          itemDefault({ name: "Tafel „Seeungeheuer“", alt: ["Tafel der drei Brüder"], counts: { DeK: 1 }, images: { DeK: { src: noImage } } }),
+          itemDefault({ name: "Tafel „Steppenbüffel“", alt: ["Tafel der drei Brüder"], counts: { DeK: 1 }, images: { DeK: { src: noImage } } }),
+        ],
+      },
+      "kleiner Gegenstand (doppelt)" : [
+        itemDefault({ name: "Orweyns Hammer", alt: ["Orweyns Hammer der Stärke", "Magische Waffe"], counts: { DRidN: 1 }, images: { DRidN: { caption: "Hammer" } } }),
+        itemDefault({ name: "Ruhmreiche Rüstung", counts: { AdH: 2 } }),
+        itemDefault({ name: "Spitzhacke", alt: ["Gabe der Schildzwerge"], counts: { DZ: 1 } }),
+      ],
+      "kleiner Gegenstand (Set)" : [
+        itemDefault({ name: "Federkleid", alt: ["Des Phoenix's Federkleid"], counts: { AdH: 1 }, images: { AdH: { caption: "Des Phoenix's Federkleid" } } }),
+        itemDefault({ name: "Kurzbogen", alt: ["Des Waldläufers Kurzbogen"], counts: { AdH: 1 }, images: { AdH: { caption: "Des Waldläufers Kurzbogen" } } }),
+        itemDefault({ name: "Tarnmantel", alt: ["Des Waldläufers Tarnmantel"], counts: { AdH: 1 }, images: { AdH: { caption: "Des Waldläufers Tarnmantel" } } }),
+        itemDefault({ name: "Zorn des Phoenix", counts: { AdH: 1 } }),
+      ],
+      "Köcher" : [
+        itemDefault({ name: "Köcher (2)", counts: { BdR: 1 }, images: { BdR: { src: "Bilder/Koecher.png", caption: "Köcher" } } }),
+        itemDefault({ name: "Köcher (3)", counts: { BdR: 2 }, images: { BdR: { src: "Bilder/Koecher.png", caption: "Köcher" } } }),
+        itemDefault({ name: "Köcher (4)", counts: { BdR: 3 }, images: { BdR: { src: "Bilder/Koecher.png", caption: "Köcher" } } }),
+        itemDefault({ name: "Köcher (5)", counts: { BdR: 3 }, images: { BdR: { src: "Bilder/Koecher.png", caption: "Köcher" } } }),
+        itemDefault({ name: "Köcher (6)", counts: { BdR: 3 }, images: { BdR: { src: "Bilder/Koecher.png", caption: "Köcher" } } }),
+        itemDefault({ name: "Köcher (7)", counts: { BdR: 2 }, images: { BdR: { src: "Bilder/Koecher.png", caption: "Köcher" } } }),
+        itemDefault({ name: "Köcher (8)", counts: { BdR: 1 }, images: { BdR: { src: "Bilder/Koecher.png", caption: "Köcher" } } }),
+        itemDefault({ name: "Köcher (9)", counts: { BdR: 1 }, images: { BdR: { src: "Bilder/Koecher.png", caption: "Köcher" } } }),
+      ],
+      "Magisches Pulver" : [
+        itemDefault({ name: "Bannpulver", counts: { MH: 1 } }),
+        itemDefault({ name: "Experimentierpulver", counts: { MH: 1 } }),
+        itemDefault({ name: "Meditationspulver", counts: { MH: 1 } }),
+        itemDefault({ name: "Schwächungspulver", counts: { MH: 1 } }),
+        itemDefault({ name: "Umwandlungspulver", counts: { MH: 1 }, images: { MH: { src: noImage } } }),
+        itemDefault({ name: "Vorhersehungspulver", counts: { MH: 1 }, images: { MH: { src: noImage } } }),
+      ],
+    },
+    "Geröllplättchen etc." : {
+      "" : [
+        itemDefault({ name: "Eisplättchen", counts: { AG: "8*" } }),
+        itemDefault({ name: "Erdplättchen", counts: { AG: 3 } }),
+        itemDefault({ name: "Schattenplättchen", counts: { DZ: 8 } }),
+      ],
+      "Felsenplättchen" : [
+        itemDefault({ name: "Felsenplättchen (3)", counts: { DfL: 1 }, images: { DfL: { src: "Bilder/Felsenplaettchen_2.png", caption: "Felsenplättchen" } } }),
+        itemDefault({ name: "Felsenplättchen (4)", counts: { DfL: 1 }, images: { DfL: { src: "Bilder/Felsenplaettchen_2.png", caption: "Felsenplättchen" } } }),
+        itemDefault({ name: "Felsenplättchen (6)", counts: { DfL: 1 }, images: { DfL: { src: "Bilder/Felsenplaettchen_2.png", caption: "Felsenplättchen" } } }),
+      ],
+      "Feuerplättchen" : [
+        itemDefault({ name: "Feuerplättchen", counts: { AG: 4 }, images: { AG: { src: "Bilder/Feuerplaettchen_AG.png" } } }),
+        itemDefault({ name: "Feuerplättchen (-4)", counts: { StSch: 8 }, images: { StSch: { src: "Bilder/Feuerplaettchen.png", caption: "Feuerplättchen" } } }),
+        itemDefault({ name: "Feuerplättchen (3)", counts: { DlH: 2 }, images: { DlH: { src: "Bilder/Feuerplaettchen_DlH.png", caption: "Feuerplättchen" } } }),
+        itemDefault({ name: "Lagerfeuerplättchen", counts: { CuT: 3 }, images: { CuT: { src: "Bilder/Lagerfeuerplaettchen_CuT.png" } } }),
+      ],
+      "Geröllplättchen" : [
+        itemDefault({ name: "Geröllplättchen (2)", alt: ["Geröll"], counts: { BiBo: 1, DLvA: 1 }, images: { BiBo: { src: "Bilder/Geroellplaettchen_2.png", caption: "Geröllplättchen" }, DLvA: { src: "Bilder/Geroellplaettchen_2.png", caption: "Geröllplättchen" } } }),
+        itemDefault({ name: "Geröllplättchen (5)", alt: ["Geröll"], counts: { BiBo: 2, DLvA: 2 }, images: { BiBo: { src: "Bilder/Geroellplaettchen_5.png", caption: "Geröllplättchen" }, DLvA: { src: "Bilder/Geroellplaettchen_5.png", caption: "Geröllplättchen" } } }),
+        itemDefault({ name: "Geröllplättchen (6)", alt: ["Geröll"], counts: { BiBo: 1, DLvA: 1 }, images: { BiBo: { src: "Bilder/Geroellplaettchen_6.png", caption: "Geröllplättchen" }, DLvA: { src: "Bilder/Geroellplaettchen_6.png", caption: "Geröllplättchen" } } }),
+        itemDefault({ name: "Geröllplättchen (7)", alt: ["Geröll"], counts: { BiBo: 2, DLvA: 2 }, images: { BiBo: { src: "Bilder/Geroellplaettchen_7.png", caption: "Geröllplättchen" }, DLvA: { src: "Bilder/Geroellplaettchen_7.png", caption: "Geröllplättchen" } } }),
+        itemDefault({ name: "Geröllplättchen (8)", alt: ["Geröll"], counts: { BiBo: 2, DLvA: 2 }, images: { BiBo: { src: "Bilder/Geroellplaettchen_8.png", caption: "Geröllplättchen" }, DLvA: { src: "Bilder/Geroellplaettchen_8.png", caption: "Geröllplättchen" } } }),
+      ],
+      "Lichtplättchen" : [
+        itemDefault({ name: "Lichtplättchen (2)", counts: { StSch: 1 }, images: { StSch: { src: "Bilder/Lichtplaettchen.png", caption: "Lichtplättchen" } } }),
+        itemDefault({ name: "Lichtplättchen (4)", counts: { StSch: 2 }, images: { StSch: { src: "Bilder/Lichtplaettchen.png", caption: "Lichtplättchen" } } }),
+        itemDefault({ name: "Lichtplättchen (6)", counts: { StSch: 1 }, images: { StSch: { src: "Bilder/Lichtplaettchen.png", caption: "Lichtplättchen" } } }),
+        itemDefault({ name: "Lichtplättchen (8)", counts: { StSch: 1 }, images: { StSch: { src: "Bilder/Lichtplaettchen.png", caption: "Lichtplättchen" } } }),
+        itemDefault({ name: "Lichtplättchen (10)", counts: { StSch: 1 }, images: { StSch: { src: "Bilder/Lichtplaettchen.png", caption: "Lichtplättchen" } } }),
+        itemDefault({ name: "Lichtplättchen (14)", counts: { StSch: 1 }, images: { StSch: { src: "Bilder/Lichtplaettchen.png", caption: "Lichtplättchen" } } }),
+      ],
+    },
+    "großes Plättchen" : [
+      itemLargeToken({ counts: { BiBo: 1, DfL: 1, DLvA: 1 }, images: { DfL: { src: "Bilder/grosse_Plaettchen_DfL.png" } } }, "Brunnen"),
+      itemLargeToken({ counts: { BiBo: 1, DLvA: 1 } }, "Goldfund", "1 Gold"),
+      itemLargeToken({ counts: { BiBo: 1, DfL: 1, DLvA: 1 }, images: { DfL: { src: "Bilder/grosse_Plaettchen_DfL.png" } } }, "Goldfund", "2 Gold"),
+      itemLargeToken({ counts: { BiBo: 1, DfL: 1, DLvA: 1 }, images: { DfL: { src: "Bilder/grosse_Plaettchen_DfL.png" } } }, "Händler"),
+      itemLargeToken({ counts: { DlH: 1 }, images: { DlH: { src: "Bilder/grosse_Plaettchen_DlH.png" } } }, "Höhle", "Apfelnüsse"),
+      itemLargeToken({ counts: { BiBo: 1, DLvA: 1 } }, "Nebel", "1 Gold"),
+      itemLargeToken({ counts: { DlH: 1 }, images: { DlH: { src: "Bilder/grosse_Plaettchen_DlH.png" } } }, "Nebel", "Apfelnüsse"),
+      itemLargeToken({ counts: { DfL: 1 }, images: { DfL: { src: "Bilder/grosse_Plaettchen_DfL.png" } } }, "Pilze", "Willenspunkte +2"),
+      itemLargeToken({ counts: { BiBo: 1, DlH: 1, DLvA: 1 }, images: { DlH: { src: "Bilder/grosse_Plaettchen_DlH.png" } } }, "Nebel", "Stärkepunkte +1"),
+      itemLargeToken({ counts: { BiBo: 1, DLvA: 1 } }, "Nebel", "Willenspunkte +2"),
+      itemLargeToken({ counts: { DlH: 1 }, images: { DlH: { src: "Bilder/grosse_Plaettchen_DlH.png" } } }, "Quelle", "Willenspunkte +2"),
+    ],
+    "Heldenwappen" : [
+      itemHeroCrest({ counts : { DH: 1, DRidN: 1 }, images: { DH: { src: "Bilder/Heldenwappen_DH.png", caption: "Heldenwappen" } } }, "beige"),
+      itemHeroCrest({ counts : { DlH: 1, DRidN: 1 }, images: { DlH: { src: "Bilder/Heldenwappen_DlH.png", caption: "Heldenwappen" } } }, "blau"),
+      itemHeroCrest({ counts : { DH: 1, DRidN: 1 }, images: { DH: { src: "Bilder/Heldenwappen_DH.png", caption: "Heldenwappen" } } }, "braun"),
+      itemHeroCrest({ counts : { DH: 1, MH: 1 }, images: { DH: { src: "Bilder/Heldenwappen_DH.png", caption: "Heldenwappen" }, MH: { src: noImage } } }, "dunkelblau"),
+      itemHeroCrest({ counts : { DlH: 1, DRidN: 1 }, images: { DlH: { src: "Bilder/Heldenwappen_DlH.png", caption: "Heldenwappen" } } }, "gelb"),
+      itemHeroCrest({ counts : { DRidN: 1 } }, "dunkelgrau"),
+      itemHeroCrest({ counts : { DlH: 1, DRidN: 1 }, images: { DlH: { src: "Bilder/Heldenwappen_DlH.png", caption: "Heldenwappen" } } }, "grün"),
+      itemHeroCrest({ counts : { DRidN: 1, MH: 1 }, images: { MH: { src: noImage } } }, "orange"),
+      itemHeroCrest({ counts : { MH: 1 }, images: { MH: { src: noImage } } }, "rosa"),
+      itemHeroCrest({ counts : { DH: 1 }, images: { DH: { src: "Bilder/Heldenwappen_DH.png", caption: "Heldenwappen" } } }, "rot"),
+      itemHeroCrest({ counts : { DlH: 1, DRidN: 1 }, images: { DlH: { src: "Bilder/Heldenwappen_DlH.png", caption: "Heldenwappen" } } }, "violett"),
+      itemHeroCrest({ counts : { DRidN: 1, MH: 1 }, images: { MH: { src: noImage } } }, "weiß"),
+    ],
+    "Kartographie-Plättchen" : {
+      "" : [
+        itemDefault({ name: "Federplättchen", counts: { DRidN: "6*" } }),
+      ],
+      "Kartograph" : [
+        itemDefault({ name: "Kartograph „4 Gold“", counts: { AG: 1 }, images: { AG: { caption: "Kartograph" } } }),
+        itemDefault({ name: "Kartograph „Kraft des roten Mondes“", counts: { AG: 1 }, images: { AG: { caption: "Kartograph" } } }),
+        itemDefault({ name: "Kartograph „Takuri-Spiegel“", counts: { AG: 1 }, images: { AG: { caption: "Kartograph" } } }),
+        itemDefault({ name: "Kartograph „tulgorischer Hüter der Zeit“", counts: { AG: 1 }, images: { AG: { caption: "Kartograph" } } }),
+      ],
+    },
+    "Kreaturenplättchen etc." : [
+      itemDefault({ name: "Bewegungsplättchen", counts: { DlH: "8*" } }),
+      itemDefault({ name: "Kreaturenplättchen", counts: { BiBo: "15*", DLvA: "15*" } }),
+      itemDefault({ name: "Nord-Kreaturenplättchen", counts: { DRidN: "10*" } }),
+      itemDefault({ name: "Unwetterplättchen", counts: { DRidN: "7*" } }),
+      itemDefault({ name: "Zwergenstatuen-Ortsplättchen", counts: { AG: "4*" } }),      
+    ],
+    "Marker" : {
+      "" : [
+        itemDefault({ name: "„Baum der Lieder“-Plättchen", counts: { AG: 1 } }),
+        itemDefault({ name: "Einhornreiter", counts: { DZ: 1 } }),
+        itemDefault({ name: "Erfolgsplättchen", counts: { AJGadS: 12 } }),
+        itemDefault({ name: "„Ewige Kälte“-Plättchen", counts: { DeK: 1 }, images: { DeK: { src: noImage, caption: "Ewige Kälte" } } }),
+        itemDefault({ name: "Flutplättchen", counts: { DRidN: 1 } }),
+        itemDefault({ name: "Golem-Symbol", counts: { DH: 1 } }),
+        itemDefault({ name: "Mondplättchen", counts: { AJGadS: 4 } }),
+        itemDefault({ name: "„N“-Plättchen", counts: { BiBo: 1, DLvA: 1 } }),
+        itemDefault({ name: "rotes X", counts: { BiBo: 3, DeK: 1, DfL: 5, DlH: 3, DLvA: 3, StSch: 1 }, images: { DeK: { src: noImage }, DfL: { src: "Bilder/rotes_X_DfL.png" }, DlH: { src: "Bilder/rotes_X_DlH.png" }, StSch: { src: "Bilder/rote_X_StSch.png", caption: "rote X" } } }),
+        itemDefault({ name: "Sonnenaufgang-Plättchen", alt: ["Nachtmarker"], counts: { AJ: 1, AJGadS: 1, BiBo: 1, DH: 1, NH: 1, MH: 1 }, images: { AJ: { src: "Bilder/Nachtmarker.png", caption: "Nachtmarker" }, AJGadS: { src: "Bilder/Nachtmarker_GadS.png", caption: "Nachtmarker" }, BiBo: { src: "Bilder/Sonnenaufgang-Plaettchen_BiBo.png" }, DH: { src: "Bilder/Sonnenaufgang-Plaettchen_DH.png" }, MH: { src: "Bilder/Sonnenaufgang-Plaettchen_MH.png" } } }),
+        itemDefault({ name: "Sternchen", counts: { AG: 1, AoH: 1, BB: 2, BiBo: 8, DeK: 8, DfL: 11, DlH: 6, DLvA: 8, DRidN: 1, DZ: 4, GdK: NaN, HaE: NaN, NH: 1, StSch: 1 }, images: { AG: { src: "Bilder/Sternchen_AG.png" }, AoH: { src: noImage, caption: "Stern" }, BB: { src: noImage }, DeK: { src: noImage }, DfL: { src: "Bilder/Sternchen_DfL.png" }, DlH: { src: "Bilder/Sternchen_DlH.png" }, DRidN: { src: "Bilder/Sternchen_Norden.png" }, DZ: { src: "Bilder/Sternchen_DZ.png" }, GdK: { src: noImage }, HaE: { src: noImage }, NH: { src: noImage }, StSch: { src: "Bilder/Sternchen_StSch.png" } } }),
+        itemDefault({ name: "Thogger-Plättchen", counts: { DZ: 1 } }),
+        itemDefault({ name: "Totenkopfsymbol", counts: { GdK: NaN }, images: { GdK: { src: noImage } } }),
+        itemDefault({ name: "Tulgori-Symbol", counts: { AG: 1 } }),
+        itemDefault({ name: "Verjüngungstrank-Marker", counts: { AdH: 3 } }),
+        itemDefault({ name: "Wardrakplättchen", counts: { AJGadS: 1 } }),
+      ],
+      "Kartographie-Marker" : [
+        itemDefault({ name: "Kartographie-Marker (Feld 0)", counts: { AG: 1 }, images: { AG: { caption: "Kartographie-Marker" } } }),
+        itemDefault({ name: "Kartographie-Marker (Feld 48)", counts: { AG: 1 }, images: { AG: { caption: "Kartographie-Marker" } } }),
+        itemDefault({ name: "Kartographie-Marker (Feld 63)", counts: { AG: 1 }, images: { AG: { caption: "Kartographie-Marker" } } }),
+        itemDefault({ name: "Kartographie-Marker (Feld 71)", counts: { AG: 1 }, images: { AG: { caption: "Kartographie-Marker" } } }),
+      ],
+      "Markierungsring" : [
+        itemDefault({ name: "dunkler Markierungsring", counts: { AG: 1 } }),
+        itemDefault({ name: "roter Markierungsring", alt: ["Ringplättchen"], counts: { AG: 1, DfL: 1, DlH: 1, DRidN: 1, DZ: 1, StSch: 1 }, images: { AG: { src: "Bilder/Markierungsring_AG.png" }, DfL: { src: "Bilder/Markierungsring_DfL.png", caption: "Markierungsring" }, DlH: { src: "Bilder/Markierungsring_DlH.png", caption: "Ringplättchen" }, DRidN: { src: "Bilder/Markierungsring.png", caption: "Markierungsring" }, DZ: { src: "Bilder/Markierungsring_DZ.png" }, StSch: { src: "Bilder/Markierungsring_StSch.png", caption: "Markierungsring" } } }),
+      ],
+      "Sonnenaufgang-Symbol" : [
+        itemDefault({ name: "Arbak-Plättchen", counts: { AG: 1 } }),
+        itemDefault({ name: "Eiskristall", counts: { MH: 1 } }),
+        itemDefault({ name: "Sternenschildplättchen", counts: { DlH: 2 } }),
+        itemDefault({ name: "Zwergentürenplättchen", counts: { DZ: 1 } }),
+      ],
+      "Stärkepunkteplättchen" : [
+        itemDefault({ name: "Stärkepunkteplättchen (-0)", alt: ["Minus-Stärkeplättchen (-0)"], counts: { MH: 1 }, images: { MH: { src: "Bilder/Minus-Staerkeplaettchen_-0.png", caption: "Minus-Stärkeplättchen" } } }),
+        itemDefault({ name: "Stärkepunkteplättchen (-2)", alt: ["Minus-Stärkeplättchen (-2)"], counts: { MH: 1 }, images: { MH: { src: "Bilder/Minus-Staerkeplaettchen_-2.png", caption: "Minus-Stärkeplättchen" } } }),
+        itemDefault({ name: "Stärkepunkteplättchen (-4)", alt: ["Minus-Stärkeplättchen (-4)"], counts: { MH: 1 }, images: { MH: { src: "Bilder/Minus-Staerkeplaettchen_-4.png", caption: "Minus-Stärkeplättchen" } } }),
+        itemDefault({ name: "Stärkepunkteplättchen (-5)", alt: ["Minus-Stärkeplättchen (-5)"], counts: { MH: 1 }, images: { MH: { src: "Bilder/Minus-Staerkeplaettchen_-5.png", caption: "Minus-Stärkeplättchen" } } }),
+        itemDefault({ name: "Stärkepunkteplättchen (+1)", counts: { AG: 1 }, images: { AG: { caption: "Stärkepunkteplättchen" } } }),
+        itemDefault({ name: "Stärkepunkteplättchen (+3)", counts: { AG: 1 }, images: { AG: { caption: "Stärkepunkteplättchen" } } }),
+        itemDefault({ name: "Stärkepunkteplättchen (+5)", counts: { AG: 1 }, images: { AG: { caption: "Stärkepunkteplättchen" } } }),
+        itemDefault({ name: "Stärkepunkteplättchen (+7)", counts: { AG: 1 }, images: { AG: { caption: "Stärkepunkteplättchen" } } }),
+        itemDefault({ name: "Stärkepunkteplättchen (+9)", counts: { AG: 1 }, images: { AG: { caption: "Stärkepunkteplättchen" } } }),
+      ],
+      "Willenspunkteplättchen etc." : {
+        "" : [
+          itemDefault({ name: "Vergiftungsmarker", counts: { AdH: 6 } }),
+          itemDefault({ name: "Verwundungsmarker", counts: { AdH: 6 } }),
+        ],
+        "Willenspunkteplättchen" : [
+          itemDefault({ name: "Willenspunkteplättchen (1)", alt: ["Willenspunkt"], counts: { BdR: 18, CuT: 20 }, images: { BdR: { src: "Bilder/Willenspunkt.png", caption: "Willenspunkt" }, CuT: { src: "Bilder/Willenspunkt_CuT.png", caption: "Willenspunkteplättchen" } } }),
+          itemDefault({ name: "Willenspunkteplättchen (3)", counts: { AG: 4 }, images: { AG: { src: "Bilder/Willenspunkteplaettchen.png", caption: "Willenspunkteplättchen" } } }),
+        ],
+      },
+      "Wolfssymbol etc." : [
+        itemDefault({ name: "Doppelaxt-Plättchen", counts: { AG: 1 } }),
+        itemDefault({ name: "Metkrug-Marker", counts: { AdH: 3 } }),
+        itemDefault({ name: "Tarensymbol", counts: { DRidN: 1 } }),
+        itemDefault({ name: "Wolfssymbol", counts: { StSch: 1 } }),
+        itemDefault({ name: "Zauberhutmarker", counts: { AdH: 3 } }),
+      ],
+      "Zielmarker" : [
+        itemDefault({ name: "grüner Zielmarker", counts: { DeK: 1 }, images: { DeK: { src: noImage } } }),
+        itemDefault({ name: "roter Zielmarker", counts: { DeK: 2 }, images: { DeK: { src: noImage } } }),
+      ],
+    },
+    "Nebelplättchen etc." : {
+      "Eisplättchen" : [
+        itemIceToken({ counts: { DeK: 1 }, images: { DeK: { src: noImage } } }, "Askimar-Klinge"),
+        itemIceToken({ counts: { DeK: 1 }, images: { DeK: { src: noImage } } }, "Edelstein"),
+        itemIceToken({ counts: { DeK: 1 }, images: { DeK: { src: noImage } } }, "Reiterhelm"),
+        itemIceToken({ counts: { DeK: 2 }, images: { DeK: { src: noImage } } }, "Stärkepunkte +1"),
+        itemIceToken({ counts: { DeK: 3 }, images: { DeK: { src: noImage } } }, "Sturm"),
+        itemIceToken({ counts: { DeK: 1 }, images: { DeK: { src: noImage } } }, "Trinkschlauch"),
+        itemIceToken({ counts: { DeK: 2 }, images: { DeK: { src: noImage } } }, "Willenspunkte -2"),
+        itemIceToken({ counts: { DeK: 2 }, images: { DeK: { src: noImage } } }, "Willenspunkte -3"),
+      ],
+      "Höhlenplättchen" : [
+        itemCaveToken({ counts: { DlH: 2 } }, "Agren"),
+        itemCaveToken({ counts: { DlH: 1 } }, "Apfelnüsse"),
+        itemCaveToken({ counts: { DlH: 1 }, images: { DlH: { src: "Bilder/Hoehlenplaettchen_Edelstein.png", caption: "Höhlenplättchen „Edelstein“" } } }, "Edelstein (2)"),
+        itemCaveToken({ counts: { DlH: 1 }, images: { DlH: { src: "Bilder/Hoehlenplaettchen_Edelstein.png", caption: "Höhlenplättchen „Edelstein“" } } }, "Edelstein (3)"),
+        itemCaveToken({ counts: { DlH: 1 }, images: { DlH: { src: "Bilder/Hoehlenplaettchen_Edelstein.png", caption: "Höhlenplättchen „Edelstein“" } } }, "Edelstein (4)"),
+        itemCaveToken({ counts: { DlH: 1 }, images: { DlH: { src: "Bilder/Hoehlenplaettchen_Edelstein.png", caption: "Höhlenplättchen „Edelstein“" } } }, "Edelstein (6)"),
+        itemCaveToken({ counts: { DlH: 1 }, images: { DlH: { src: "Bilder/Hoehlenplaettchen_Hoehlenwicht.png", caption: "Höhlenplättchen „Höhlenwicht“" } } }, "Höhlenwicht (10)"),
+        itemCaveToken({ counts: { DlH: 1 }, images: { DlH: { src: "Bilder/Hoehlenplaettchen_Hoehlenwicht.png", caption: "Höhlenplättchen „Höhlenwicht“" } } }, "Höhlenwicht (12)"),
+        itemCaveToken({ counts: { DlH: 1 } }, "Trinkschlauch"),
+        itemCaveToken({ counts: { DlH: 1 }, images: { DlH: { src: noImage } } }, "Willenspunkte -2"),
+        itemCaveToken({ counts: { DlH: 1 }, images: { DlH: { src: noImage } } }, "Willenspunkte +3"),
+      ],
+      "Minenplättchen" : {
+        "" : [
+          itemMineToken({ counts: { AJ: 5 } }, "Drache"),
+          itemMineToken({ counts: { AJ: 1 } }, "Falke"),
+          itemMineToken({ alt: ["Irlok"], counts: { AJ: 1 } }, "Krake"),
+        ],
+        "Minenplättchen „Schlüssel“" : [
+          itemMineToken({ counts: { BMAJ: 1 }, images: { BMAJ: { src: "Bilder/Minenplaettchen_AJSdS.png", caption: "Minenplättchen" } } }, "blauer Schlüssel"),
+          itemMineToken({ counts: { BMAJ: 1 }, images: { BMAJ: { src: "Bilder/Minenplaettchen_AJSdS.png", caption: "Minenplättchen" } } }, "gelber Schlüssel"),
+          itemMineToken({ counts: { BMAJ: 1 }, images: { BMAJ: { src: "Bilder/Minenplaettchen_AJSdS.png", caption: "Minenplättchen" } } }, "grüner Schlüssel"),
+          itemMineToken({ counts: { BMAJ: 1 }, images: { BMAJ: { src: "Bilder/Minenplaettchen_AJSdS.png", caption: "Minenplättchen" } } }, "roter Schlüssel"),
+          itemMineToken({ alt: ["Minenplättchen „lila Schlüssel“"], counts: { BMAJ: 1 }, images: { BMAJ: { src: "Bilder/Minenplaettchen_AJSdS.png", caption: "Minenplättchen" } } }, "violetter Schlüssel"),
+        ],
+        "Minenplättchen „Truhe“" : [
+          itemMineToken({ counts: { BMAJ: 1 }, images: { BMAJ: { src: "Bilder/Minenplaettchen_AJSdS.png", caption: "Minenplättchen" } } }, "blaue Truhe"),
+          itemMineToken({ counts: { BMAJ: 1 }, images: { BMAJ: { src: "Bilder/Minenplaettchen_AJSdS.png", caption: "Minenplättchen" } } }, "gelbe Truhe"),
+          itemMineToken({ counts: { BMAJ: 1 }, images: { BMAJ: { src: "Bilder/Minenplaettchen_AJSdS.png", caption: "Minenplättchen" } } }, "grüne Truhe"),
+          itemMineToken({ counts: { BMAJ: 1 }, images: { BMAJ: { src: "Bilder/Minenplaettchen_AJSdS.png", caption: "Minenplättchen" } } }, "rote Truhe"),
+          itemMineToken({ alt: ["Minenplättchen „lila Truhe“"], counts: { BMAJ: 1 }, images: { BMAJ: { src: "Bilder/Minenplaettchen_AJSdS.png", caption: "Minenplättchen" } } }, "violette Truhe"),
+        ],
+        "Minenplättchen „Wolfsjunges“" : [
+          itemMineToken({ counts: { AJ: 2 }, images: { AJ: { src: "Bilder/Minenplaettchen_Wolfsjunges.png", caption: "Minenplättchen „Wolfsjunges“" } } }, "Wolfsjunges (graues Fell)"),
+          itemMineToken({ alt: ["Lonas"], counts: { AJ: 1 }, images: { AJ: { src: noImage, caption: "Minenplättchen „Wolfsjunges“" } } }, "Wolfsjunges (schwarzes Fell)"),
+        ],
+      },
+      "Mystikplättchen" : [
+        itemMysticToken({ alt: ["Trollhort"], counts: { DZ: 1 }, images: { DZ: { caption: "Mystikplättchen" } } }, "2 Gold"),
+        itemMysticToken({ counts: { DZ: 2 }, images: { DZ: { caption: "Mystikplättchen" } } }, "Ereigniskarte"),
+        itemMysticToken({ counts: { DZ: 1 }, images: { DZ: { caption: "Mystikplättchen" } } }, "Feuerkreis"),
+        itemMysticToken({ counts: { DZ: 1 }, images: { DZ: { caption: "Mystikplättchen" } } }, "Hexe"),
+        itemMysticToken({ alt: ["Trollhöhle"], counts: { DZ: 1 }, images: { DZ: { caption: "Mystikplättchen" } } }, "Troll"),
+      ],
+      "Nebelplättchen" : [
+        itemFogToken({ counts: { GdK: 5 }, images: { GdK: { src: noImage } } }, ""),
+        itemFogToken({ counts: { AJ: 5, AJGadS: 6, BiBo: 3, DfL: 2, DLvA: 3, DRidN: 4 }, images: { AJ: { src: "Bilder/Nebelplaettchen_Gold.png", caption: "Nebelplättchen „Gold“" }, AJGadS: { src: noImage, caption: "Nebelplättchen „Gold“" }, DfL: { src: "Bilder/Nebelplaettchen_1_Gold_DfL.png" }, DRidN: { src: "Bilder/Nebelplaettchen_1_Gold_Norden.png" } } }, "1 Gold"),
+        itemFogToken({ counts: { GdK: 3 }, images: { GdK: { src: noImage } } }, "2 Gold"),
+        itemFogToken({ counts: { DlH: 4, HaE: 1 }, images: { HaE: { src: noImage } } }, "Agren"),
+        itemFogToken({ counts: { DlH: 4 } }, "Apfelnüsse"),
+        itemFogToken({ counts: { DlH: 2 } }, "Bergskral"),
+        itemFogToken({ counts: { GdK: 1 }, images: { GdK: { src: noImage } } }, "Bogen"),
+        itemFogToken({ counts: { HaE: 2 }, images: { HaE: { src: noImage } } }, "Brennholz"),
+        itemFogToken({ counts: { AJ: 6, AJGadS: 6 }, images: { AJGadS: { src: noImage } } }, "Drache"),
+        itemFogToken({ counts: { BiBo: 5, DfL: 4, DlH: 3, DLvA: 5 }, images: { DfL: { src: "Bilder/Nebelplaettchen_Ereigniskarte_DfL.png" }, DlH: { src: "Bilder/Nebelplaettchen_Ereigniskarte_DlH.png" } } }, "Ereigniskarte"),
+        itemFogToken({ counts: { AoH: 1 }, images: { AoH: { src: noImage } } }, "Ewiges Feuer"),
+        itemFogToken({ counts: { AJGadS: 1, HaE: 1 }, images: { HaE: { src: noImage } } }, "Falke"),
+        itemFogToken({ counts: { AJ: 4, AJGadS: 4 }, images: { AJGadS: { src: noImage } } }, "Fernrohr"),
+        itemFogToken({ counts: { DRidN: 1 } }, "Garz"),
+        itemFogToken({ counts: { AoH: 1 }, images: { AoH: { src: noImage } } }, "Glaube in die Zauberei +1"),
+        itemFogToken({ counts: { AJ: "10*", AJGadS: "10*", BiBo: 2, DLvA: 2, DRidN: 4, GdK: 3 }, images: { AJ: { src: "Bilder/Nebelplaettchen_Gor_2.png", caption: "Nebelplättchen „Gor (2)“" }, AJGadS: { src: noImage }, DRidN: { src: "Bilder/Nebelplaettchen_Gor_Norden.png" }, GdK: { src: noImage } } }, "Gor"),
+        itemFogToken({ counts: { GdK: 1 }, images: { GdK: { src: noImage } } }, "Gor, Zauberhutpilze"),
+        itemFogToken({ counts: { HaE: 1 }, images: { HaE: { src: noImage } } }, "Helm"),
+        itemFogToken({ alt: ["Trank der Hexe", "Kräuterhexe Reka"], counts: { AJ: 1, AJGadS: 1, BiBo: 1, DLvA: 1, GdK: 1 }, images: { AJ: { src: "Bilder/Nebelplaettchen_Kraeuterhexe_Reka.png", caption: "Nebelplättchen „Die Kräuterhexe Reka“" }, AJGadS: { src: noImage, caption: "Nebelplättchen „Die Kräuterhexe Reka“" }, BiBo: { src: "Bilder/Nebelplaettchen_Trank_der_Hexe.png", caption: "Nebelplättchen „Trank der Hexe“" }, DLvA: { src: "Bilder/Nebelplaettchen_Trank_der_Hexe.png", caption: "Nebelplättchen „Trank der Hexe“" }, GdK: { src: noImage } } }, "Hexe"),
+        itemFogToken({ counts: { AJ: 6, AJGadS: 8 }, images: { AJGadS: { src: noImage } } }, "Holz"),
+        itemFogToken({ counts: { DfL: 2 } }, "Kräuter"),
+        itemFogToken({ counts: { DRidN: 1 } }, "Ruhm +1"),
+        itemFogToken({ counts: { DfL: 1 } }, "Ruinengeist"),
+        itemFogToken({ counts: { AJGadS: 6 } }, "Schattenwardrak"),
+        itemFogToken({ counts: { GdK: 3 }, images: { GdK: { src: noImage } } }, "Schwarzer Tölpling"),
+        itemFogToken({ counts: { AJ: 5, AJGadS: 5 }, images: { AJGadS: { src: noImage } } }, "Schwerter"),
+        itemFogToken({ counts: { GdK: 1 }, images: { GdK: { src: noImage } } }, "Silberhirsch"),
+        itemFogToken({ counts: { GdK: 1 }, images: { GdK: { src: noImage } } }, "Skral"),
+        itemFogToken({ counts: { DfL: 2 } }, "Sporne"),
+        itemFogToken({ counts: { HaE: 3 }, images: { HaE: { src: noImage } } }, "Spornenetz"),
+        itemFogToken({ counts: { GdK: 1 }, images: { GdK: { src: noImage } } }, "Stärkepunkte -1"),
+        itemFogToken({ counts: { AoH: 2, BiBo: 1, DfL: 1, DlH: 1, DLvA: 1, DRidN: 1, GdK: 2, HaE: 1 }, images: { AoH: { src: noImage }, DfL: { src: "Bilder/Nebelplaettchen_Staerkepunkte_1_DfL.png" }, DlH: { src: "Bilder/Nebelplaettchen_Staerkepunkte_1_DlH.png" }, DRidN: { src: "Bilder/Nebelplaettchen_Staerkepunkte_1_Norden.png" }, GdK: { src: noImage }, HaE: { src: noImage } } }, "Stärkepunkte +1"),
+        itemFogToken({ counts: { DlH: 1 } }, "Sternkraut"),
+        itemFogToken({ counts: { AJ: 1, AJGadS: 1 }, images: { AJGadS: { src: noImage } } }, "Stundenglas"),
+        itemFogToken({ counts: { HaE: 3 }, images: { HaE: { src: noImage } } }, "Sturm"),
+        itemFogToken({ counts: { GdK: 1 }, images: { GdK: { src: noImage } } }, "Trank der Stärke"),
+        itemFogToken({ counts: { AoH: 2, BiBo: 1, DfL: 1, DlH: 1, DLvA: 1, GdK: 1 }, images: { AoH: { src: noImage }, DfL: { src: "Bilder/Nebelplaettchen_Trinkschlauch_DfL.png" }, DlH: { src: "Bilder/Nebelplaettchen_Trinkschlauch_DlH.png" }, GdK: { src: noImage } } }, "Trinkschlauch"),
+        itemFogToken({ counts: { GdK: 2 }, images: { GdK: { src: noImage } } }, "untoter Gor"),
+        itemFogToken({ counts: { DlH: 2 } }, "Wargor"),
+        itemFogToken({ counts: { AoH: 3, DRidN: 1, GdK: 1 }, images: { AoH: { src: noImage }, GdK: { src: noImage } } }, "Willenspunkte -2"),
+        itemFogToken({ counts: { AoH: 1, DlH: 1, DRidN: 3, GdK: 1 }, images: { AoH: { src: noImage }, DlH: { src: "Bilder/Nebelplaettchen_Willenspunkte_-3_DlH.png" }, GdK: { src: noImage } } }, "Willenspunkte -3"),
+        itemFogToken({ counts: { GdK: 2 }, images: { GdK: { src: noImage } } }, "Willenspunkte -4"),
+        itemFogToken({ counts: { BiBo: 1, DfL: 2, DlH: 2, DLvA: 1, GdK: 1, HaE: 1 }, images: { DfL: { src: "Bilder/Nebelplaettchen_Willenspunkte_2_DfL.png" }, DlH: { src: "Bilder/Nebelplaettchen_Willenspunkte_2_DlH.png" }, GdK: { src: noImage }, HaE: { src: noImage } } }, "Willenspunkte +2"),
+        itemFogToken({ counts: { BiBo: 1, DlH: 1, DLvA: 1, GdK: 1 }, images: { DlH: { src: "Bilder/Nebelplaettchen_Willenspunkte_3_DlH.png" }, GdK: { src: noImage } } }, "Willenspunkte +3"),
+        itemFogToken({ counts: { HaE: 1 }, images: { HaE: { src: noImage } } }, "Winterkraut"),
+        itemFogToken({ counts: { DfL: 1 } }, "Wurfmesser"),
+        itemFogToken({ counts: { AoH: 1 }, images: { AoH: { src: noImage } } }, "Zauberbuch (Heilzauber)"),
+        itemFogToken({ counts: { AoH: 1 }, images: { AoH: { src: noImage } } }, "Zauberbuch (Lichtzauber)"),
+        itemFogToken({ counts: { AoH: 1 }, images: { AoH: { src: noImage } } }, "Zauberbuch (Windzauber)"),
+      ],
+      "Schneeplättchen" : [
+        itemSnowToken({ counts: { DRidN: 3 } }, "1 Gold"),
+        itemSnowToken({ counts: { DeK: 2 }, images: { DeK: { src: noImage } } }, "Blaubachbeeren"),
+        itemSnowToken({ counts: { DeK: 3 }, images: { DeK: { src: noImage } } }, "Brennholz"),
+        itemSnowToken({ counts: { DeK: 2 }, images: { DeK: { src: noImage, caption: "Schneeplättchen „Edelsteine“" } } }, "Edelstein"),
+        itemSnowToken({ counts: { DRidN: 12 } }, "Eis"),
+        itemSnowToken({ counts: { DRidN: 4 } }, "Ewiges Feuer"),
+        itemSnowToken({ counts: { DRidN: 9 } }, "Feuerholz"),
+        itemSnowToken({ counts: { DRidN: 2 } }, "Kälteeinbruch"),
+        itemSnowToken({ counts: { DRidN: 3 } }, "Portal"),
+        itemSnowToken({ counts: { DeK: 2 }, images: { DeK: { src: noImage } } }, "rotes Blutkraut"),
+        itemSnowToken({ counts: { DRidN: 1 } }, "Ruhm +1"),
+        itemSnowToken({ counts: { DeK: 2, DRidN: 1 }, images: { DeK: { src: noImage }, DRidN: { caption: "Schneeplättchen „Stärke +1“" } } }, "Stärkepunkte +1"),
+        itemSnowToken({ counts: { DeK: 6 }, images: { DeK: { src: noImage } } }, "Sturm"),
+        itemSnowToken({ counts: { DeK: 1 }, images: { DeK: { src: noImage } } }, "Tafel Greif"),
+        itemSnowToken({ counts: { DeK: 1 }, images: { DeK: { src: noImage } } }, "Tafel Seeungeheuer"),
+        itemSnowToken({ counts: { DeK: 1 }, images: { DeK: { src: noImage } } }, "Tafel Steppenbüffel"),
+        itemSnowToken({ counts: { DeK: 2 }, images: { DeK: { src: noImage } } }, "weiße Warzwurzeln"),
+        itemSnowToken({ counts: { DeK: 2, DRidN: 2 }, images: { DeK: { src: noImage } } }, "Willenspunkte -2"),
+        itemSnowToken({ counts: { DRidN: 2 }, images: { DRidN: { src: noImage } } }, "Willenspunkte -3"),
+        itemSnowToken({ counts: { DRidN: 1 }, images: { DRidN: { src: noImage } } }, "Willenspunkte -4"),
+      ],
+      "Wrackplättchen" : [
+        itemDefault({ name: "Wrackplättchen „2 Gold“", alt: ["Schatz"], counts: { DRidN: 1 }, images: { DRidN: { src: "Bilder/Wrackplaettchen.png", caption: "Wrackplättchen" } } }),
+        itemDefault({ name: "Wrackplättchen „2 Ruhm“", alt: ["Seemann in Not"], counts: { DRidN: 2 }, images: { DRidN: { src: "Bilder/Wrackplaettchen.png", caption: "Wrackplättchen" } } }),
+        itemDefault({ name: "Wrackplättchen „Nerax“", alt: ["Nerax flieht"], counts: { DRidN: 2 }, images: { DRidN: { src: "Bilder/Wrackplaettchen.png", caption: "Wrackplättchen" } } }),
+      ],
+    },
+    "Ortsplättchen" : [
+      itemDefault({ name: "Ortsplättchen (10)", counts: { DZ: 1 }, images: { DZ: { caption: "Ortsplättchen" } } }),
+      itemDefault({ name: "Ortsplättchen (11)", counts: { DZ: 1 }, images: { DZ: { caption: "Ortsplättchen" } } }),
+      itemDefault({ name: "Ortsplättchen (33/34)", counts: { DZ: 1 }, images: { DZ: { caption: "Ortsplättchen" } } }),
+      itemDefault({ name: "Ortsplättchen (40)", counts: { DZ: 1 }, images: { DZ: { caption: "Ortsplättchen" } } }),
+      itemDefault({ name: "Ortsplättchen (42)", counts: { DZ: 1 }, images: { DZ: { caption: "Ortsplättchen" } } }),
+      itemDefault({ name: "Ortsplättchen (67)", counts: { DZ: 1 }, images: { DZ: { caption: "Ortsplättchen" } } }),
+    ],
+    "Spielplanüberleger" : {
+      "" : [
+        itemDefault({ name: "Dämmerung-Feld", counts: { DZ: 1 } }),
+        itemDefault({ name: "Geheimgang", counts: { DeK: 1 }, images: { DeK: { src: noImage } } }),
+        itemDefault({ name: "Pfeilplättchen", counts: { DZ: 8 } }),
+        itemDefault({ name: "Wardrakleiste (3 Teile)", counts: { AJGadS: 1 }, images: { AJGadS: { src: "Bilder/Wardrakleiste.png", caption: "Wardrakleiste" } } }),
+      ],
+      "Kreaturenleiste" : [
+        itemDefault({ name: "Kreaturenleiste (5 Helden)", counts: { NH: 1 }, images: { NH: { src: "Bilder/Kreaturenleisten.png", caption: "Kreaturenleisten" } } }),
+        itemDefault({ name: "Kreaturenleiste (6 Helden)", counts: { NH: 1 }, images: { NH: { src: "Bilder/Kreaturenleisten.png", caption: "Kreaturenleisten" } } }),
+        itemDefault({ name: "Kreaturenleiste („Nord-Spielplan“, 5 Helden)", counts: { DRidN: 1 }, images: { DRidN: { caption: "Kreaturenleiste für 5 Helden" } } }),
+        itemDefault({ name: "Kreaturenleiste („Nord-Spielplan“, 6 Helden)", counts: { DRidN: 1 }, images: { DRidN: { caption: "Kreaturenleiste für 6 Helden" } } }),
+      ],
+      "Sonderteil" : [
+        itemDefault({ name: "Brennender Wald", counts: { AJGadS: 1 } }),
+        itemDefault({ name: "Erloschener Wachturm", counts: { AJGadS: 1 } }),
+        itemDefault({ name: "Kaputte Brücke", counts: { AJGadS: 1 } }),
+        itemDefault({ name: "Zerstörter Wald", counts: { AJGadS: 1 } }),
+      ],
+      "Spielplan" : [
+        itemDefault({ name: "Zwergenmine", alt: ["Cavern"], counts: { AJGadS: 1 }, images: { AJGadS: { src: noImage, caption: "Spielplan „Zwergenmine“" } } }),
+      ],
+      "Spielplanfeld" : [
+        itemDefault({ name: "Feld 18 („Lager der Tulgori“)", counts: { AG: 1 }, images: { AG: { caption: "„Lager der Trolle“ (Feld 18)" } } }),
+        itemDefault({ name: "Feld 37", counts: { AG: 1 }, images: { AG: { caption: "„Feld 37“" } } }),
+        itemDefault({ name: "Feld 39 („Lager der Trolle“)", counts: { DZ: 1 }, images: { DZ: { caption: "„Lager der Trolle“ (Feld 39)" } } }),
+        itemDefault({ name: "Feld 83 („Verlassener Turm“)", alt: ["Feld 0 („Brandurs Lager“)"], counts: { DZ: 1 }, images: { DZ: { caption: "„Verlassener Turm“ (Feld 83)" } } }),
+        itemDefault({ name: "Feld 72 („Zerstörter Karren“)", alt: ["„Erloths Stand“"], counts: { DZ: 1 }, images: { DZ: { caption: "„Zerstörter Karren“ (Feld 72)" } } }),
+        itemDefault({ name: "Feld 73", counts: { AG: 1 }, images: { AG: { caption: "„Feld 73“" } } }),
+        itemDefault({ name: "Feld 206 („Brücke“)", alt: ["Feld 372"], counts: { DlH: 1 }, images: { DlH: { src: "Bilder/Bruecke.png", caption: "Brücke" } } }),
+      ],
+    },
+    "Stundenplättchen etc." : {
+      "" : [
+        itemDefault({ name: "„-4“-Plättchen", alt: ["„-1“-Plättchen"], counts: { DlH: 1 } }),
+        itemDefault({ name: "Pferdeerweiterung", counts: { AdH: 1 } }),
+      ],
+      "Stundenplättchen" : [
+        itemDefault({ name: "Stundenplättchen (4. Stunde)", counts: { AG: 1 }, images: { AG: { caption: "Stundenplättchen" } } }),
+        itemDefault({ name: "Stundenplättchen (5. Stunde)", counts: { AG: 1 }, images: { AG: { caption: "Stundenplättchen" } } }),
+        itemDefault({ name: "Stundenplättchen (6. Stunde)", counts: { AG: 1 }, images: { AG: { caption: "Stundenplättchen" } } }),
+        itemDefault({ name: "Stundenplättchen (7. Stunde)", counts: { AG: 1 }, images: { AG: { caption: "Stundenplättchen" } } }),
+      ],
+    },
+    "Zwergentür" : [
+      itemDwarfDoor({ counts: { DZ: 1 } }, "Feuer", 1),
+      itemDwarfDoor({ counts: { DZ: 1 } }, "Feuer", 2),
+      itemDwarfDoor({ counts: { DZ: 1 } }, "Feuer", 3),
+      itemDwarfDoor({ counts: { DZ: 1 } }, "Wasser", 1),
+      itemDwarfDoor({ counts: { DZ: 1 } }, "Wasser", 2),
+      itemDwarfDoor({ counts: { DZ: 1 } }, "Wasser", 3),
+    ],
+  },
+  "Spielplan etc." : {
+    "" : [
+        itemDefault({ name: "Spielplan „Adventures of Hadria“ (Hadria)", counts: { AoH: 1 }, images: { AoH: { src: "Bilder/Spielplan/Vor_den_Toren_Yras.jpg", caption: "Spielplan" } } }),
+        itemDefault({ name: "Spielplan „Adventures of Hadria“ (Yra)", counts: { AoH: 1 }, images: { AoH: { src: "Bilder/Spielplan/Im_Innenhof_der_Feste_von_Yra.jpg", caption: "Spielplan" } } }),
+        itemDefault({ name: "Spielplan „Rietburg“", counts: { BdR: 1 }, images: { BdR: { src: "Bilder/Spielplan/Rietburg.jpg", caption: "Spielplan" } } }),
+    ],
+    "Schachtelboden" : [
+      itemDefault({ name: "Pfahlbausiedlung", counts: { DfL: 1 }, images: { DfL: { src: "Bilder/Spielplan/Pfahlbausiedlung.jpg" } } }),
+      itemDefault({ name: "Trollhöhle", counts: { DfL: 1 }, images: { DfL: { src: "Bilder/Spielplan/Trollhoehle.jpg" } } }),
+    ],
+    "Spielplanseite" : {
+      "" : [
+        itemDefault({ name: "Azturien", alt: ["Fluss"], counts: { DfL: 1 }, images: { DfL: { src: "Bilder/Spielplan/Azturien.jpg", caption: "doppelseitiger Spielplan" } } }),
+        itemDefault({ name: "Cavern", alt: ["Mine"], counts: { BiBo: 1, DLvA: 1, GdK: 1 }, images: { BiBo: { src: "Bilder/Spielplan/Cavern.jpg", caption: "doppelseitiger Spielplan" }, DLvA: { src: "Bilder/Spielplan/Cavern.jpg", caption: "doppelseitiger Spielplan" }, GdK: { src: noImage, caption: "Spielplan" } } }),
+        itemDefault({ name: "Hadria", counts: { DRidN: 1 }, images: { DRidN: { src: "Bilder/Spielplan/Hadria.jpg", caption: "doppelseitiger Spielplan" } } }),
+        itemDefault({ name: "Krahd", counts: { DlH: 1 }, images: { DlH: { src: "Bilder/Spielplan/Krahd.jpg", caption: "doppelseitiger Spielplan" } } }),
+        itemDefault({ name: "Nebelinseln", alt: ["Nord-Spielplan"], counts: { DRidN: 1 }, images: { DRidN: { src: "Bilder/Spielplan/Nebelinseln.jpg", caption: "doppelseitiger Spielplan" } } }),
+      ],
+      "Andor" : [
+        itemDefault({ name: "Andor", counts: { AJ: 1, BiBo: 1, DLvA: 1, GdK: 1 }, images: { AJ: { src: "Bilder/Spielplan/Rietland.jpg" }, BiBo: { src: "Bilder/Spielplan/Andor.jpg", caption: "doppelseitiger Spielplan" }, DLvA: { src: "Bilder/Spielplan/Andor.jpg", caption: "doppelseitiger Spielplan" }, GdK: { src: "Bilder/App/_Spielplan.png", caption: "Spielplan" } } }),
+        itemDefault({ name: "Andor (Winter)", counts: { DeK: 1, HaE: 1 }, images: { DeK: { src: "Bilder/Spielplan/Andor_Winter.jpg", caption: "doppelseitiger Spielplan" }, HaE: { src: noImage, caption: "Spielplan" } } }),
+      ],
+      "Graues Gebirge" : [
+        itemDefault({ name: "Graues Gebirge", counts: { DlH: 1 }, images: { DlH: { src: "Bilder/Spielplan/Graues_Gebirge.jpg", caption: "doppelseitiger Spielplan" } } }),
+        itemDefault({ name: "Graues Gebirge (Winter)", counts: { GdK: 1, HaE: 1 }, images: { GdK: { src: noImage, caption : "Spielplan" }, HaE: { src: noImage, caption: "Spielplan" } } }),
+      ],
+      "Land der drei Brüder" : [
+        itemDefault({ name: "Land der drei Brüder", alt: ["Steppe", "See"], counts: { DfL: 1 }, images: { DfL: { src: "Bilder/Spielplan/Land_der_drei_Brueder.jpg", caption: "doppelseitiger Spielplan" } } }),
+        itemDefault({ name: "Land der drei Brüder (Winter)", alt: ["Steppe", "See"], counts: { DeK: 1 }, images: { DeK: { src: "Bilder/Spielplan/Land_der_drei_Brueder_Winter.jpg", caption: "doppelseitiger Spielplan" } } }),
+      ],
+    },
+  },
+  "Tafel" : {
+    "" : [
+      itemDefault({ name: "„Gemeinsam kämpfen“-Tafel", alt: ["Gemeinsam-kämpfen-Leiste"], counts: { BB: 1 }, images: { BB: {src: "Bilder/Gemeinsam-kaempfen-Leiste.png", caption: "Gemeinsam-kämpfen-Leiste" } } }),
+      itemDefault({ name: "Schiffstafel", counts: { DRidN: 1 } }),
+    ],
+    "Ausrüstungstafel" : {
+      "" : [
+        itemDefault({ name: "kleine Ausrüstungstafel", counts: { BB: 1 } }),
+      ],
+      "große Ausrüstungstafel" : [
+        itemDefault({ name: "Ausrüstungstafel", alt: ["Kampftafel"], counts: { BiBo: 1, DLvA: 1, GdK: 1, HaE: 1 }, images: { BiBo: { src: "Bilder/Ausruestungstafel.jpg" }, DLvA: { src: "Bilder/Ausruestungstafel.jpg" }, GdK: { src: "Bilder/App/_Heldentafel_Haendler.png", caption: "Chada | Händler" }, HaE: { src: noImage } } }),
+        itemDefault({ name: "Ausrüstungstafel („Das ferne Land“)", alt: ["Kampftafel"], counts: { DfL: 1 }, images: { DfL: { src: noImage, caption: "Ausrüstungstafel" } } }),
+        itemDefault({ name: "Ausrüstungstafel „Der Baum der Lieder“", counts: { AdH: 1 } }),
+        itemDefault({ name: "Ausrüstungstafel „Der Barde, Grenolin“", counts: { AdH: 1 } }),
+        itemDefault({ name: "Ausrüstungstafel „Der Verlassene Turm“", counts: { AdH: 1 } }),
+        itemDefault({ name: "Ausrüstungstafel „Die Mine“", counts: { AdH: 1 } }),
+        itemDefault({ name: "Ausrüstungstafel „Die Taverne“", counts: { AdH: 1 } }),
+        itemDefault({ name: "Ausrüstungstafel („Graues Gebirge“)", alt: ["Kampftafel"], counts: { DlH: 1 }, images: { DlH: { src: "Bilder/Ausruestungstafel_DlH.jpg" }, caption: "Ausrüstungstafel" } }),
+        itemDefault({ name: "Ausrüstungstafel „Nord-Spielplan“", alt: ["Ausrüstungstafel „Hadria“"], counts: { DRidN: 1 }, images: { DRidN: { src: "Bilder/Ausruestungstafel_Norden.jpg" } } }),
+      ],
+    },
+    "Heldentafel" : {
+      "" : [
+        itemHeroBoard({ alt: ["Darhen/Darh"], counts: { DH: 1 } }, "Beschwörer/Beschwörerin"),
+        itemHeroBoard({ alt: ["Grent/Grea"], counts: { BM: 1, DfL: 1 }, images: { DfL: { src: "Bilder/Heldentafel_Bergkriegerin.jpg", caption: "Heldentafel „Bergkriegerin“" } } }, "Bergkrieger/Bergkriegerin"),
+        itemHeroBoard({ alt: ["Arbon/Talvora"], counts: { BiBo: 1, NH: 1 }, images: { BiBo: { src: noImage }, NH: { src: noImage } } }, "Bewahrer/Bewahrerin"),
+        itemHeroBoard({ alt: ["Teyan/Tenaya"], counts: { DfL: 1 }, images: { DfL: { src: "Bilder/Heldentafel_Bezwingerin.jpg", caption: "Heldentafel „Bezwingerin“" } } }, "Bezwinger/Bezwingerin"),
+        itemHeroBoard({ alt: ["Pasco/Chada"], counts: { AJ: 1, BiBo: 1, DlH: 1, DLvA: 1, GdK: 1 }, images: { AJ: { src: "Bilder/Heldentafeln_AJ.png", caption: "Heldentafeln" }, DlH: { src: noImage }, GdK: { src: "Bilder/App/_Heldentafel_Haendler.png", caption: "Chada | Händler" } } }, "Bogenschütze/Bogenschützin"),
+        itemHeroBoard({ alt: ["Liphardus/Eara"], counts: { BM: 1 }, images: { BM: { src: "Bilder/Heldentafel_Dunkle_Magierin.jpg" } } }, "Dunkler Magier/Dunkle Magierin"),
+        itemHeroBoard({ alt: ["Ijsdur/Ijsdora"], counts: { MH: 1 } }, "Eis-Dämon/Eis-Dämonin"),
+        itemHeroBoard({ alt: ["Fenn/Fennah"], counts: { BiBo: 1, BMAJ: 1, NH: 1 }, images: { BiBo: { src: "Bilder/Heldentafel_Faehrtenleser_BiBo.png" }, BMAJ: { src: "Bilder/Heldentafel_Faehrtenleserin_AJ.png", caption: "Heldentafel" }, NH: { src: "Bilder/Heldentafel_Faehrtenleser.png" } } }, "Fährtenleser/Fährtenleserin"),
+        itemHeroBoard({ alt: ["Trieest/Taleena"], counts: { BM: 1, HaE: 1 }, images: { HaE: { src: noImage } } }, "Feuerkrieger/Feuerkriegerin"),
+        itemHeroBoard({ counts: { BM: 1 } }, "Fremder/Fremde"),
+        itemHeroBoard({ alt: ["Forn/Forr"], counts: { DH: 1 } }, "Halbskral/Halbskralin"),
+        itemHeroBoard({ alt: ["Drukil/Drukia"], counts: { DH: 1 } }, "Hautwandler/Hautwandlerin"),
+        itemHeroBoard({ alt: ["Avid/Avida"], counts: { DfL: 1 }, images: { DfL: { src: "Bilder/Heldentafel_Heiler.jpg", caption: "Heldentafel „Heiler“" } } }, "Heiler/Heilerin"),
+        itemHeroBoard({ alt: ["Kheela/Kheelan"], counts: { BiBo: 1, NH: 1 }, images: { BiBo: { src: noImage }, NH: { src: noImage } } }, "Hüter/Hüterin"),
+        itemHeroBoard({ counts: { BM: 1 } }, "Juna"),
+        itemHeroBoard({ alt: ["Thorn/Mairen"], counts: { AJ: 1, BiBo: 1, DeK: 1, DlH: 1, DLvA: 1, GdK: 1, HaE: 1 }, images: { AJ: { src: "Bilder/Heldentafeln_AJ.png", caption: "Heldentafeln" }, DeK: { src: noImage }, DlH: { src: noImage }, GdK: { src: noImage }, HaE: { src: noImage } } }, "Krieger/Kriegerin"),
+        itemHeroBoard({ alt: ["Alchemist"], counts: { BM: 1 } }, "Naraven"),
+        itemHeroBoard({ alt: ["Weihnachts-Gor"], counts: { BM: 1 } }, "Santa Gor"),
+        itemHeroBoard({ alt: ["Stinner/Stianna"], counts: { DRidN: 1 }, images: { DRidN: { caption: "Heldentafel „Seekrieger/Seekriegerin“" } } }, "Seekrieger/Seekriegerin"),
+        itemHeroBoard({ alt: ["Leander/Leane"], counts: { DH: 1 } }, "Seher/Seherin"),
+        itemHeroBoard({ alt: ["Barz/Yaza"], counts: { MH: 1 } }, "Steppennomade/Steppennomadin"),
+        itemHeroBoard({ alt: ["Raash/Raashana"], counts: { DfL: 1 }, images: { DfL: { src: "Bilder/Heldentafel_Steppenreiter.jpg", caption: "Heldentafel „Steppenreiter“" } } }, "Steppenreiter/Steppenreiterin"),
+        itemHeroBoard({ alt: ["Aćhan/Aćh"], counts: { MH: 1 }, images: { MH: { src: "Bilder/Heldentafel_Takuri-Hueterin.jpg", caption: "Heldentafel „Takuri-H+terin“" } } }, "Takuri-Hueter/Takuri-Hueterin"),
+        itemHeroBoard({ alt: ["Bragor/Rhega"], counts: { BiBo: 1, NH: 1 }, images: { BiBo: { src: noImage }, NH: { src: noImage } } }, "Tarus/Tare"),
+        itemHeroBoard({ counts: { BM: 1 } }, "Unbekannter Krieger"),
+        itemHeroBoard({ alt: ["Feuerwächter/Feuerwächterin", "Teyan/Tenaya"], counts: { AJGadS: 1, DeK: 1 }, images: { AJGadS: { src: "Bilder/Heldentafel_AJ_Feuerwaechter.png", caption: "Heldentafel" }, DeK: { src: noImage } } }, "Wächter/Wächterin"),
+        itemHeroBoard({ alt: ["Jarim/Jarid"], counts: { BM: 1 } }, "Wassermagier/Wassermagierin"),
+        itemHeroBoard({ alt: ["Orfen/Marfa"], counts: { BB: 1, BiBo: 1, BM: 1, GdK: 1 }, images: { BB: { src: "Bilder/Heldentafel_Wolfskrieger_BB.png" }, BiBo: { src: "Bilder/Heldentafel_Wolfskrieger_BiBo.png" }, GdK: { src: noImage } } }, "Wolfskrieger/Wolfskriegerin"),
+        itemHeroBoard({ alt: ["Magier/Magierin", "Liphardus/Eara"], counts: { AJ: 1, AoH: 1, BiBo: 1, DeK: 1, DlH: 1, DLvA: 1, GdK: 1, HaE: 1 }, images: { AJ: { src: "Bilder/Heldentafeln_AJ.png", caption: "Heldentafeln" }, AoH: { src: noImage, caption: "Heldentafel" }, DeK: { src: noImage }, DlH: { src: noImage }, GdK: { src: noImage }, HaE: { src: noImage } } }, "Zauberer/Zauberin"),
+        itemHeroBoard({ alt: ["Kirr"], counts: { BM: 1 } }, "Zauberer der Zeit"),
+        itemHeroBoard({ alt: ["Kram/Bait"], counts: { AJ: 1, BiBo: 1, DeK: 1, DlH: 1, DLvA: 1, GdK: 1, HaE: 1 }, images: { AJ: { src: "Bilder/Heldentafeln_AJ.png", caption: "Heldentafeln" }, DeK: { src: noImage }, DlH: { src: noImage }, GdK: { src: noImage }, HaE: { src: noImage } } }, "Zwerg/Zwergin"),
+      ],
+      "Heldentafel „Runenmeister/Runenmeisterin“" : [
+        itemDefault({ name: "Runenscheibe", counts: { MH: 1 } }),
+        itemHeroBoard({ alt: ["Ilar/Iril"], counts: { MH: 1 }, images: { MH: { src: "Bilder/Heldentafel_Runenmeisterin.jpg", caption: "Heldentafel „Runenmeisterin“" } } }, "Runenmeister/Runenmeisterin"),
+      ],
+    },
+    "Sondertafel" : [
+      itemDefault({ name: "Sondertafel „Die Karte des Grauen Gebirges“", counts: { DH: 1 } }),
+      itemDefault({ name: "Sondertafel „Die Karte des Landes Krahd“", counts: { DH: 1 } }),
+    ],
+  },
+  "Zubehör" : {
+    "Holzscheibe" : [
+      itemWoodenDisk({ counts : { DH: 2, DRidN: 2 }, images: { DH: { caption: "beigefarbene Holzscheibe" }, DRidN: { src: "Bilder/Holzscheibe_beige.png" } } }, "beige"),
+      itemWoodenDisk({ counts : { BiBo: 2, DeK: 2, DfL: 2, DlH: 2, DLvA: 2, GdK: 2, HaE: 2 } }, "blau"),
+      itemWoodenDisk({ counts : { BiBo: 2, DfL: 2, DH: 2, NH: 2 } }, "braun"),
+      itemWoodenDisk({ counts : { BiBo: 2, DH: 2, MH: 2 }, images: { DH: { caption: "blaue Holzscheibe" } } }, "dunkelblau"),
+      itemWoodenDisk({ counts : { BB: 2, BiBo: 2, GdK: 2, NH: 2 }, images: { BB: { caption: "graue Holzscheibe" }, GdK: { caption: "graue Holzscheibe" }, NH: { caption: "graue Holzscheibe" } } }, "dunkelgrau"),
+      itemWoodenDisk({ alt: ["gelber Zeitstein", "gelber Willenspunktemarker", "Sonnenscheibe"], counts : { AJ: 27, BiBo: 2, DeK: 2, DlH: 2, DLvA: 2, GdK: 2, HaE: 2 }, images: { AJ: { caption: "Sonnenscheibe" } } }, "gelb"),
+      itemWoodenDisk({ counts : { BiBo: 2, DeK: 2, DfL: 2, DlH: 2, DLvA: 2, GdK: 2 } }, "grün"),
+      itemWoodenDisk({ counts : { BiBo: 2, MH: 2, NH: 2, SQDP: 1 }, images: { BiBo: { caption: "orangefarbene Holzscheibe" }, MH: { caption: "orangefarbene Holzscheibe" }, NH: { caption: "orangefarbene Holzscheibe" }, SQDP: { caption: "orangefarbener Willenspunktemarker" } } }, "orange"),
+      itemWoodenDisk({ counts : { HaE: 2 } }, "orangerot"),
+      itemWoodenDisk({ counts : { MH: 2 }, images: { MH: { caption: "rosafarbene Holzscheibe" } } }, "rosa"),
+      itemWoodenDisk({ counts : { BiBo: 1, DeK: 1, DfL: 1, DH: 2, DlH: 1, DLvA: 1, GdK: 1, HaE: 1, SQDP: 1 }, images: { SQDP: { caption: "roter Willenspunktemarker" } } }, "rot"),
+      itemWoodenDisk({ alt: ["neutraler Zeitstein"], counts : { BiBo: 4, DH: 4, MH: 4, NH: 4 }, images: { BiBo: { src: "Bilder/neutrale_Zeitsteine_BiBo.png", caption: "schwarze Holzscheiben" }, DH: { src: "Bilder/neutrale_Zeitsteine_DH.png", caption: "schwarze Holzscheiben" }, MH: { src: "Bilder/neutrale_Zeitsteine_MH.png", caption: "schwarze Holzscheiben" }, NH: { src: "Bilder/neutrale_Zeitsteine.png", caption: "schwarze Holzscheiben" } } }, "schwarz"),
+      itemWoodenDisk({ counts : { AoH: 2, BiBo: 2, DeK: 2, DfL: 2, DlH: 2, DLvA: 2, GdK: 2, HaE: 2 } }, "violett"),
+      itemWoodenDisk({ counts : { AoH: 1, BiBo: 2, DRidN: 1, MH: 2, NH: 2 }, images: { DRidN: { src: "Bilder/Holzscheibe_weiss.png" } } }, "weiß"),
+    ],
+    "Holzstein" : [
+      itemWoodenCube({ counts : { DH: 1, DRidN: 1 }, images: { DH: { caption: "beigefarbener Holzstein" }, DRidN: { src: "Bilder/Holzstein_beige.png" } } }, "beige"),
+      itemWoodenCube({ counts : { BiBo: 1, DeK: 1, DfL: 1, DlH: 1, DLvA: 1, GdK: 1, HaE: 1 } }, "blau"),
+      itemWoodenCube({ counts : { BiBo: 1, DH: 1, DfL: 1, NH: 1 } }, "braun"),
+      itemWoodenCube({ counts : { BiBo: 1, DH: 1, MH: 1 }, images: { DH: { caption: "blauer Holzstein" } } }, "dunkelblau"),
+      itemWoodenCube({ counts : { BB: 1, BiBo: 1, GdK: 1, NH: 1 }, images: { BB: { caption: "grauer Holzstein" }, GdK: { caption: "grauer Holzstein" }, NH: { caption: "grauer Holzstein" } } }, "dunkelgrau"),
+      itemWoodenCube({ counts : { BiBo: 1, DeK: 1, DlH: 1, DLvA: 1, GdK: 1, HaE: 1 } }, "gelb"),
+      itemWoodenCube({ counts : { BiBo: 1, DeK: 1, DfL: 1, DlH: 1, DLvA: 1, GdK: 1 } }, "grün"),
+      itemWoodenCube({ alt: ["Takuri-Marker"], counts : { BiBo: 1, MH: 2, NH: 1, SQDP: 1 }, images: { BiBo: { caption: "orangefarbener Holzstein" }, MH: { caption: "orangefarbener Holzstein" }, NH: { caption: "orangefarbener Holzstein" }, SQDP: { caption: "orangefarbener Stärkemarker" } } }, "orange"),
+      itemWoodenCube({ counts : { MH: 1 }, images: { MH: { caption: "rosafarbener Holzstein" } } }, "rosa"),
+      itemWoodenCube({ counts : { HaE: 1 } }, "orangerot"),
+      itemWoodenCube({ counts : { BiBo: 1, DeK: 1, DfL: 1, DH: 1, DlH: 1, DLvA: 1, GdK: 1, HaE: 1, SQDP: 1 }, images: { SQDP: { caption: "roter Stärkemarker" } } }, "rot"),
+      itemWoodenCube({ counts : { BB: 2, DeK: 2, DRidN: 2 }, images: { DRidN: { src: "Bilder/Holzstein_schwarz.png" } } }, "schwarz"),
+      itemWoodenCube({ counts : { AoH: 1, BiBo: 1, DeK: 1, DfL: 1, DlH: 1, DLvA: 1, GdK: 1, HaE: 1 } }, "violett"),
+      itemWoodenCube({ counts : { AoH: 1, BiBo: 1, DlH: 1, DRidN: 1, MH: 1, NH: 1 }, images: { DRidN: { src: "Bilder/Holzstein_weiss.png" } } }, "weiß"),
+    ],
+    "Kunststoffhalter" : [
+      itemPlasticHolder({ counts : { BiBo: 9, DH: 2, DRidN: 2 }, images: { BiBo: { caption: "beigefarbener Kunststoffhalter" }, DH: { caption: "beigefarbener Kunststoffhalter" } } }, "beige"),
+      itemPlasticHolder({ counts : { AJ: 2, BdR: 1, BiBo: 2, DeK: 2, DfL: 2, DlH: 2, DLvA: 2, GdK: 2, HaE: 2 } }, "blau"),
+      itemPlasticHolder({ counts : { BiBo: 2, DfL: 2, DH: 3, NH: 2 } }, "braun"),
+      itemPlasticHolder({ counts : { BiBo: 2, DH: 2, MH: 2 }, images: { DH: { caption: "blauer Kunststoffhalter" } } }, "dunkelblau"),
+      itemPlasticHolder({ counts : { AG: 2, BB: 2, BiBo: 2, DlH: 6, GdK: 2, NH: 2 }, images: { GdK: { src: noImage, caption: "grauer Kunststoffhalter" } } }, "dunkelgrau"),
+      itemPlasticHolder({ counts : { AJ: 2, BdR: 1, BiBo: 2, DeK: 2, DlH: 2, DLvA: 2, GdK: 2, HaE: 2 } }, "gelb"),
+      itemPlasticHolder({ counts : { AG: 3, AJ: 1, AoH: 1, BdR: 1, BB: 2, BiBo: 6, DeK: 4, DfL: 3, DH: 3, DlH: 2, DLvA: 3, DRidN: 10, DZ: 4, GdK: 7, HaE: 2, NH: 1, StSch: 5 }, images: { AG: { caption: "hellgrauer Kunststoffhalter" }, AoH: { src: noImage }, BB: { caption: "hellgrauer Kunststoffhalter" }, BiBo: { caption: "(hell)grauer Kunststoffhalter" }, DlH: { caption: "hellgrauer Kunststoffhalter" }, DRidN: { caption: "hellgrauer Kunststoffhalter" } } }, "grau"),
+      itemPlasticHolder({ counts : { AJ: 2, BiBo: 2, BdR: 1, DeK: 2, DfL: 2, DlH: 2, DLvA: 2, GdK: 2 } }, "grün"),
+      itemPlasticHolder({ counts : { AG: 4 } }, "oliv-grün"),
+      itemPlasticHolder({ counts : { BB: 9, BiBo: 2, MH: 3, NH: 2 }, images: { BB: { caption: "orangefarbener Kunststoffhalter" }, BiBo: { caption: "orangefarbener Kunststoffhalter" }, MH: { caption: "orangefarbener Kunststoffhalter" }, NH: { caption: "orangefarbener Kunststoffhalter" } } }, "orange"),
+      itemPlasticHolder({ counts : { MH: 3 }, images: { MH: { caption: "rosafarbener Kunststoffhalter" } } }, "rosa"),
+      itemPlasticHolder({ counts : { AG: 1, AJ: 9, AJGadS: 1, BB: 3, BiBo: 30, DeK: 27, DfL: 31, DH: 2, DlH: 23, DLvA: 26, DZ: 3, GdK: NaN, HaE: NaN, NH: 1, StSch: 3 } }, "rot"),
+      itemPlasticHolder({ counts : { AG: 4, BB: 1, BiBo: 5, DeK: 1, DfL: 6, DH: 2, DLvA: 4, DRidN: 7, DZ: 9, GdK: NaN, NH: 2, StSch: 1 } }, "schwarz"),
+      itemPlasticHolder({ counts : { CuT: 2 }, images: { CuT: { caption: "Kunststoffhalter" } } }, "transparent"),
+      itemPlasticHolder({ counts : { AJ: 2, AoH: 1, BdR: 1, BiBo: 2, DeK: 2, DfL: 2, DlH: 2, DLvA: 2, GdK: 2, HaE: 2 }, alt: ["lila Kunststoffhalter"], images: { AJ: { caption: "lila Kunststoffhalter" } } }, "violett"),
+      itemPlasticHolder({ counts : { AG: 1, AoH: NaN, BdR: 1, BiBo: 2, DfL: 3, DlH: 7, DRidN: 19, MH: 2, NH: 2 } }, "weiß"),
+    ],
+    "Würfel" : {
+      "großer Würfel" : {
+        "Augenwürfel" : [
+          itemDefault({ name: "grauer Augenwürfel", counts: { DfL: 1 }, images: { DfL: { src: noImage, caption: "großer grauer Würfel" } } }),
+          itemDefault({ id: "roter-augenwuerfel", name: "roter Würfel", counts: { AJ: 1, AJGadS: 1 }, images: { AJ: { src: noImage }, AJGadS: { src: noImage } } }),
+          itemDefault({ name: "schwarzer Augenwürfel", counts: { BiBo: 1, DH: 1 }, images: { BiBo: { caption: "großer schwarzer Würfel" }, DH: { src: "Bilder/schwarzer_Augenwuerfel_DH.png", caption: "großer schwarzer Würfel" } } }),
+        ],
+        "Zahlenwürfel" : [
+          itemDefault({ name: "großer blau-grüner Würfel", alt: ["türkiser Winterwürfel"], counts: { DRidN: 1 }, images: { DRidN: { src: "Bilder/Wuerfel_gross_tuerkis.png" } } }),
+          itemDefault({ name: "großer grauer Würfel", counts: { DlH: 4 }, images: { DlH : { src: noImage } } }),
+          itemDefault({ name: "großer roter Würfel", alt: ["Feuerwürfel"], counts: { DRidN: 1 }, images: { DRidN: { src: "Bilder/Wuerfel_gross_rot.png" } } }),
+          itemDefault({ name: "großer schwarzer Würfel", counts: { BiBo: 4, DeK: 2, DfL: 1, DLvA: 4, GdK: 9 }, images: { BiBo: { src: noImage }, DLvA : { src: noImage }, GdK : { src: noImage } } }),
+          itemDefault({ name: "großer weißer Würfel", alt: ["Wassergeist-Würfel"], counts: { BiBo: 1, NH: 1 }, images: { BiBo: { src: "Bilder/Wuerfel_gross_weiss.png" }, NH: { src: noImage } } }),
+        ],
+      },
+      "kleiner Würfel" : [
+        itemDefault({ name: "dunkelblauer Runenwürfel", counts: { MH: 1 }, images: { MH: { src: noImage } } }),
+        itemDefault({ name: "weißer Pyramidenwürfel", counts: { MH: 1 }, images: { MH: { src: noImage } } }),
+        itemDie({ alt: ["Heldenwürfel"], counts: { BiBo: 3, DH: 3, DRidN: 2 }, images: { DH: { caption: "beigefarbener Würfel" }, DRidN: { src: "Bilder/Wuerfel_beige.png", caption: "beige Würfel" } } }, "beige"),
+        itemDie({ alt: ["Heldenwürfel"], counts: { AJ: 4, BiBo: 4, DeK: 4, DfL: 2, DlH: 4, DLvA: 4, GdK: 4, HaE: 4 } }, "blau"),
+        itemDie({ alt: ["Heldenwürfel"], counts: { BiBo: 3, DfL: 4, DH: 2, NH: 3 } }, "braun"),
+        itemDie({ alt: ["Heldenwürfel"], counts: { BiBo: 3, DH: 5 }, images: { DH: { caption: "blauer Würfel" } } }, "dunkelblau"),
+        itemDie({ alt: ["Heldenwürfel"], counts: { BB: 3, BiBo: 3, GdK: 3, NH: 3 }, images: { BB: { caption: "grauer Würfel" }, GdK: { caption: "grauer Würfel" }, NH: { caption: "grauer Würfel" } } }, "dunkelgrau"),
+        itemDie({ alt: ["Heldenwürfel"], counts: { AJ: 3, BiBo: 3, DeK: 3, DlH: 3, DLvA: 3, GdK: 3, HaE: 3 } }, "gelb"),
+        itemDie({ alt: ["Heldenwürfel"], counts: { AJ: 3, BiBo: 5, DeK: 3, DfL: 3, DlH: 5, DLvA: 5, GdK: 5 } }, "grün"),
+        itemDie({ alt: ["Heldenwürfel"], counts : { BB: 3, BiBo: 2, MH: 2, NH: 2, SQDP: 2 }, images: { BB: { caption: "orangefarbener Würfel" }, BiBo: { caption: "orangefarbener Würfel" }, MH: { caption: "orangefarbener Würfel" }, NH: { caption: "orangefarbener Würfel" }, SQDP: { caption: "orangefarbener Würfel" } } }, "orange"),
+        itemDie({ alt: ["Heldenwürfel"], counts: { HaE: 3 } }, "orangerot"),
+        itemDie({ counts: { MH: 4 }, images: { MH: { caption: "rosafarbener Würfel" } } }, "rosa"),
+        itemDie({ alt: ["Heldenwürfel", "Kreaturenwürfel"], counts: { BiBo: 3, DeK: 3, DfL: 3, DH: 3, DlH: 3, DLvA: 3, GdK: 4, HaE: 3, SQDP: 2 } }, "rot"),
+        itemDie({ alt: ["lila Würfel", "Heldenwürfel"], counts: { AJ: 1, AoH: 1, BiBo: 1, DeK: 1, DfL: 1, DlH: 1, DLvA: 1, GdK: 1, HaE: 1 }, images: { AJ: { caption: "lila Würfel" } } }, "violett"),
+        itemDie({ alt: ["Heldenwürfel", "Kreaturenwürfel"], counts: { AoH: 3, BiBo: 1, DlH: 2, DRidN: 5, NH: 1 }, images: { DRidN: { src: "Bilder/Wuerfel_weiss.png", caption: "weiße Würfel" } } }, "weiß"),
+      ],
+    },
+  },
+};
+
+const items = [];
+function expandItems (item, category=[]) {
+  if (Array.isArray(item)) {
+    item.forEach(it => {
+      it.category = category.slice(0);
+      items.push(it);
+    });
+  }
+  else {
+    for (const [key, value] of Object.entries(item)) {
+      if (key !== ""){
+        category.push(key);
+      }
+      expandItems(value, category);
+      if (key !== ""){
+        category.pop();
+      }
+    }
+  }
+}
+expandItems(nestedItems);
+
+// ==================== counts parsen und distinct hinzufügen ====================
+items.forEach(item => {
+  item.distinct = {};
+  for (const key in item.counts) {
+    const val = item.counts[key];
+    if (typeof val === "string") {
+      if (val.includes("*")) item.distinct[key] = true;
+      item.counts[key] = parseInt(val.replace(/\*/g, ""), 10);
+    }
+  }
+});
+
+// ==================== Erweiterungen UI ====================
+function buildExpansionCheckboxes(){
+  const container = document.getElementById("expansions");
+  container.innerHTML = "";
+  const groups = {};
+  expansions.forEach(e => { if(!groups[e.group]) groups[e.group] = []; groups[e.group].push(e); });
+
+  for (const groupName of Object.keys(groups)) {
+    const div = document.createElement("div");
+    div.className = "checkbox-group";
+    const label = document.createElement("div");
+    label.className = "checkbox-group-name";
+    label.textContent = groupName + ":";
+    div.appendChild(label);
+
+    groups[groupName].forEach(exp => {
+      const lab = document.createElement("label");
+      lab.className = "checkbox-inline";
+      lab.title = exp.name;
+      const cb = document.createElement("input");
+      cb.type = "checkbox";
+      cb.checked = true;
+      cb.dataset.code = exp.code;
+      cb.addEventListener("change", renderTable);
+      lab.appendChild(cb);
+      lab.appendChild(document.createTextNode(` ${codeMap[exp.code]} (${exp.year == Number.MAX_VALUE ? "–" : exp.year})`));
+      div.appendChild(lab);
+    });
+
+    container.appendChild(div);
+  }
+}
+
+// ==================== Baum / Tabelle aufbauen ====================
+function buildCategoryStructure(filteredItems){
+  const root = {};
+  filteredItems.forEach(item => {
+    let node = root;
+    item.category.forEach(cat => {
+      if (!node[cat]) node[cat] = { __items: [] };
+      node = node[cat];
+    });
+    node.__items.push(item);
+  });
+  return root;
+}
+
+// calcCategorySums berechnet _sums und _distinctFlags rekursiv
+function calcCategorySums(node, enabledExp){
+  const sums = {};
+  const distinctFlags = {};
+  enabledExp.forEach(c => { sums[c] = 0; distinctFlags[c] = false; });
+
+  (node.__items || []).forEach(item => {
+    enabledExp.forEach(c => {
+      const v = item.counts[c] ?? 0;
+      sums[c] += v;
+      if (item.distinct[c]) distinctFlags[c] = true;
+    });
+  });
+
+  for (const k in node) {
+    if (k === "__items") continue;
+    const child = node[k];
+    const cs = calcCategorySums(child, enabledExp);
+    enabledExp.forEach(c => {
+      sums[c] += cs.sums[c];
+      if (cs.distinctFlags[c]) distinctFlags[c] = true;
+    });
+  }
+
+  node._sums = sums;
+  node._distinctFlags = distinctFlags;
+  return { sums, distinctFlags };
+}
+
+/*
+ buildTree:
+ - erzeugt <tr> Reihen als flaches Array (Kategoriezeile, dann alle Kinderzeilen)
+ - setzt dataset.path für jede Zeile (Kategoriezeilen: "A|B", Itemzeilen: "A|B|itemid")
+ - setzt tr._node = nodeObj für Kategoriezeilen (wichtig für updateCategoryCells)
+*/
+function buildTree(obj, level = 0, parentId = "root", enabledExp = [], parentPath = []){
+  const rows = [];
+  for (const category in obj) {
+    if (category === "__items") continue;
+
+    const thisPathArr = parentPath.concat(category);
+    const thisPath = thisPathArr.join("|");
+
+    // rekursiv Kinder aufbauen
+    const childRows = buildTree(obj[category], level + 1, category, enabledExp, thisPathArr);
+
+    // sichtbare Einzelteile (filtered by enabledExp)
+    const visibleItems = (obj[category].__items || []).filter(item => enabledExp.some(c => Number.isNaN(item.counts[c]) || ((item.counts[c] ?? 0) > 0)));
+    if (childRows.length === 0 && visibleItems.length === 0) continue;
+
+    // Kategoriezeile
+    const trCat = document.createElement("tr");
+    const tdCat = document.createElement("td");
+    tdCat.textContent = category;
+    tdCat.className = "category";
+    tdCat.style.paddingLeft = ((level > 0 ? level : 0) * 12 + 12) + "px";
+    tdCat.onclick = () => toggleCategoryRows(trCat);
+    trCat.appendChild(tdCat);
+
+    // setze path und collapsed-flag (default ausgeklappt = false)
+    trCat.dataset.path = thisPath;
+    trCat.dataset.collapsed = "false";
+    trCat.dataset.level = String(level);
+    trCat.dataset.parent = parentId;
+
+    // leere Zellen für die Spalten (werden später durch updateCategoryCells gefüllt)
+    enabledExp.forEach(_ => {
+      const td = document.createElement("td");
+      td.classList.remove("distinct");
+      td.textContent = ""; td.style.cursor = "default";
+      trCat.appendChild(td);
+    });
+
+    // referenz auf Node für späteres Auslesen
+    trCat._node = obj[category];
+
+    rows.push(trCat);
+
+    // unterkategorien
+    childRows.forEach(r => rows.push(r));
+
+    // sichtbare Einzelteile
+    visibleItems.forEach(item => {
+      const trItem = document.createElement("tr");
+      const tdItem = document.createElement("td");
+      tdItem.textContent = item.name;
+      tdItem.className = "item-row";
+      tdItem.style.paddingLeft = ((level + 1) * 12 + 12) + "px";
+      trItem.appendChild(tdItem);
+
+      // item path (Kategorie-Pfad + item id)
+      trItem.dataset.path = thisPathArr.concat(item.id || item.name).join("|");
+      trItem.dataset.level = String(level + 1);
+      trItem.dataset.parent = category;
+
+      enabledExp.forEach(code => {
+        const val = item.counts[code] ?? 0;
+        const td = document.createElement("td");
+        if(item.distinct[code]){
+          td.classList.add("distinct");
+        }
+        td.textContent = (Number.isNaN(val) ? "?" : (val > 0 ? val : "–"));
+        td.style.cursor = (Number.isNaN(val) || val > 0) ? "pointer" : "default";
+        td.onclick = (e) => { if (Number.isNaN(val) || val > 0) { e.stopPropagation(); showOverlay(item, code); } };
+        trItem.appendChild(td);
+      });
+
+      rows.push(trItem);
+    });
+    
+    rows.sort((a, b) => {
+      function getName (x) {
+        dataPath = x.getAttribute("data-path").split("|");
+        dataPath[dataPath.length-1] = x.querySelector("td").textContent;
+        return dataPath.join("|").replaceAll("„", "").replaceAll("“", "").replaceAll("(", "").replaceAll(")", "") + (x.getAttribute("data-collapsed") ? " " : "");
+      }
+      return getName(a).localeCompare(getName(b), undefined, {numeric: true, sensitivity: 'base'});
+    });
+  }
+
+  return rows;
+}
+
+// ==================== robustes Ein-/Ausklapp-Verhalten ====================
+function toggleCategoryRows(tr){
+  const tbody = document.getElementById("material-body");
+  const clickedPath = tr.dataset.path;
+  if (!clickedPath) return;
+  const prefix = clickedPath + "|";
+  const collapsed = tr.dataset.collapsed === "true";
+  const newCollapsed = !collapsed;
+  tr.dataset.collapsed = newCollapsed ? "true" : "false";
+
+  if (newCollapsed) {
+    // EINKLAPPEN: Alle Nachkommen verstecken
+    for (const r of Array.from(tbody.children)) {
+      const rp = r.dataset.path || "";
+      if (rp.startsWith(prefix)) {
+        r.hidden = true;
+        r.dataset.collapsed = "true";
+      }
+    }
+  } else {
+    // AUSKLAPPEN: Nur direkte Kinder sichtbar machen (tiefer liegende bleiben verborgen,
+    // es sei denn, ihre eigene Kategorie ist expanded)
+    const clickedLevel = clickedPath.split("|").length;
+    for (const r of Array.from(tbody.children)) {
+      const rp = r.dataset.path || "";
+      if (!rp.startsWith(prefix)) continue;
+      const level = rp.split("|").length;
+      if (level === clickedLevel + 1) {
+        // direktes Kind: sichtbar machen
+        r.hidden = false;
+        // wenn das Kind eine Kategorie ist und collapsed="true", seine Nachkommen bleiben versteckt
+        // (wir tun hier nichts weiter)
+      } else {
+        // tiefer liegende Nachkommen bleiben unverändert (meist versteckt)
+      }
+    }
+  }
+
+  // Nach dem Umschalten die Kategoriezellen aktualisieren
+  updateCategoryCells();
+}
+
+// Diese Funktion füllt Kategorie-Zellen so, dass nur die unterste sichtbare Ebene Zahlen zeigt.
+// Sie benutzt tr._node (gesetzt in buildTree) und die Reihenfolge enabledExpSorted (Headers).
+function updateCategoryCells(){
+  const tbody = document.getElementById("material-body");
+  const enabledExpSorted = getEnabledExpSorted(); // array of codes in header order
+
+  // Durchlauf aller Zeilen; bei Kategoriezeilen füllen/clearen wir die Zellen
+  const rows = Array.from(tbody.children);
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    const firstCell = row.querySelector("td");
+    if (!firstCell || !firstCell.classList.contains("category")) continue;
+
+    // Prüfe, ob es sichtbare Unterkategorien gibt (also sichtbare Zeilen innerhalb des Subtrees mit level > thisLevel)
+    const thisPath = row.dataset.path || "";
+    const prefix = thisPath + "|";
+    let hasVisibleSub = false;
+
+    // Suche nach Zeilen innerhalb des Subtree, die direkt oder indirekt Nachkommen sind
+    let itemCount = [0];
+    for (let j = i + 1; j < rows.length; j++) {
+      const r = rows[j];
+      const rp = r.dataset.path || "";
+      if (!rp.startsWith(prefix)) break; // außerhalb Subtree
+      if (!r.hidden) {
+        // wenn ein sichtbarer Nachkomme erreicht wird, dann hat diese Kategorie sichtbare Unterkategorien
+        // (kann eine Kategorie oder ein Item sein)
+        const relLevel = rp.split("|").length - thisPath.split("|").length;
+        if (relLevel >= 1) { hasVisibleSub = true; }
+      }
+      if (!r.querySelector("td").classList.contains("category")) {
+        const tds = Array.from(r.querySelectorAll("td"));
+        for (let colIdx = 1; colIdx < tds.length; ++colIdx) {
+          while (itemCount.length <= colIdx) itemCount.push(0);
+          const c = (tds[colIdx].textContent == "–" ? 0 : Math.min(1, parseInt(tds[colIdx].textContent)));
+          itemCount[colIdx] += c;
+        }
+      }
+    }
+
+    // Fülle / leere die tds der Kategorie-Zeile
+    const tds = row.querySelectorAll("td");
+    // tds[0] ist die Kategorie-Beschriftung
+    for (let colIdx = 1; colIdx < tds.length; colIdx++) {
+      tds[colIdx].classList.remove("distinct");
+      const code = enabledExpSorted[colIdx - 1];
+      if (!hasVisibleSub) {
+        // unterste sichtbare Ebene -> zeige Summe (aus node._sums)
+        const node = row._node;
+        if (node && node._sums) {
+          const num = node._sums[code] ?? 0;
+          if((node._distinctFlags && node._distinctFlags[code]) || (itemCount[colIdx] > 1 && num > 0)){
+            tds[colIdx].classList.add("distinct");
+          }
+          tds[colIdx].textContent = (Number.isNaN(num) ? "?" : (num > 0 ? num : "–"));
+        } else {
+          tds[colIdx].textContent = "–";
+        }
+      } else {
+        // hat sichtbare Unterkategorien -> leer
+        tds[colIdx].textContent = "";
+      }
+    }
+  }
+}
+
+// Hilfsfunktion: welche Erweiterungen sind aktiviert, in der Kopfzeilen-Jahres-Sortierung?
+function getEnabledExpSorted(){
+  const checkedCodes = Array.from(document.querySelectorAll('#expansions input[type="checkbox"]'))
+    .filter(cb => cb.checked)
+    .map(cb => cb.dataset.code);
+  // sortiere die expansions nach Jahr, filtere nach checkedCodes
+  return expansions.slice()
+    .filter(e => checkedCodes.includes(e.code))
+    .sort((a,b)=>(a.year == b.year ? a.code.localeCompare(b.code) : a.year - b.year))
+    .map(e=>e.code);
+}
+
+// ==================== Overlay ====================
+let currentImages = [];
+let currentIndex = 0;
+function showOverlay(item, codeClicked){
+  const overlay = document.getElementById("overlay");
+  document.getElementById("overlay-path").textContent = item.category.join(" > ");
+  document.getElementById("overlay-name").textContent = item.name;
+  document.getElementById("overlay-alt").innerHTML = (item.alt || []).join(", ");
+
+  currentImages = [];
+  for (const exp in item.images) {
+    if (getEnabledExpSorted().includes(exp)) {
+      currentImages.push({ exp, src: item.images[exp].src, caption: "<i>" + item.images[exp].caption + "</i><br/>aus „" + expansions.filter(expansion => expansion.code == exp)[0].name + "“" });
+    }
+  }
+  currentImages.sort((a, b) => {
+    a = expansions.filter(expansion => expansion.code == a.exp)[0].year;
+    b = expansions.filter(expansion => expansion.code == b.exp)[0].year;
+    return a - b;
+  });
+  // finde Index des Bildes für die geklickte Erweiterung (codeClicked)
+  const idx = currentImages.findIndex(x => x.exp === codeClicked);
+  currentIndex = idx >= 0 ? idx : 0;
+  updateOverlayImage();
+
+  // Eigenschaften-Tabelle
+  const table = document.getElementById("overlay-props");
+  table.innerHTML = "";
+  for (const k in item.properties) {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<th>${k}</th><td>${item.properties[k]}</td>`;
+    table.appendChild(tr);
+  }
+
+  overlay.style.display = "flex";
+}
+function updateOverlayImage(){
+  const img = document.getElementById("overlay-img");
+  const caption = document.getElementById("overlay-caption");
+  const btnLeft = document.querySelector(".nav-left");
+  const btnRight = document.querySelector(".nav-right");
+  if (!currentImages.length) { img.src = ""; caption.textContent = ""; btnLeft.style.display = "none"; btnRight.style.display = "none"; return; }
+  img.src = currentImages[currentIndex].src;
+  caption.innerHTML = currentImages[currentIndex].caption;
+  btnLeft.style.display = currentIndex > 0 ? "block" : "none";
+  btnRight.style.display = currentIndex < currentImages.length - 1 ? "block" : "none";
+}
+document.getElementById("overlay-close").onclick = () => { document.getElementById("overlay").style.display = "none"; };
+document.getElementById("overlay").onclick = (e) => { if (e.target.id === "overlay") e.target.style.display = "none"; };
+document.querySelector(".nav-left").onclick = () => { if (currentIndex > 0) { currentIndex--; updateOverlayImage(); } };
+document.querySelector(".nav-right").onclick = () => { if (currentIndex < currentImages.length - 1) { currentIndex++; updateOverlayImage(); } };
+
+// ==================== Render / Initialisierung ====================
+function renderTable(){
+  const tbody = document.getElementById("material-body");
+  tbody.innerHTML = "";
+
+  // enabledExpSorted: codes in the same order as the header (sorted by year)
+  const enabledExpSorted = getEnabledExpSorted();
+
+  // Kopfzeile bauen
+  const headRow = document.getElementById("table-head-row");
+  headRow.innerHTML = "";
+  const thName = document.createElement("th"); thName.textContent = "Spielmaterial";
+  thName.onclick = function () {
+    document.querySelectorAll('[data-level="0"]').forEach(elem => {
+      if (elem.getAttribute("data-collapsed") == "false") {
+        elem.querySelector("td").click();
+      }
+    });
+  }
+  headRow.appendChild(thName);
+  // Spalten pro Erweiterung (Jahres-sortiert)
+  expansions.slice().filter(e => enabledExpSorted.includes(e.code))
+    .sort((a,b)=>(a.year == b.year ? a.code.localeCompare(b.code) : a.year - b.year))
+    .forEach(exp => {
+      const th = document.createElement("th");
+      th.textContent = `${codeMap[exp.code]} (${exp.year == Number.MAX_VALUE ? "–" : exp.year})`;
+      th.title = exp.name;
+      headRow.appendChild(th);
+    });
+
+  // Items filtern (Search + only items that appear in any enabled expansion)
+  const search = removeUmlauts(document.getElementById("search").value.trim()).toLowerCase().replaceAll("-", "");
+  const enabledSet = new Set(enabledExpSorted);
+  const filteredItems = items.filter(it => {
+    const appears = Array.from(enabledSet).some(code => Number.isNaN(it.counts[code]) || ((it.counts[code] ?? 0) > 0));
+    const matchesSearch = search === "" || [it.name].concat(it.alt || []).concat(it.category || []).some(a => removeUmlauts(a).toLowerCase().replaceAll("-", "").includes(search));
+    return appears && matchesSearch;
+  });
+
+  // Baumstruktur und Summen berechnen
+  const tree = buildCategoryStructure(filteredItems);
+  calcCategorySums(tree, enabledExpSorted);
+
+  // rows bauen (pass enabledExpSorted so columns match header)
+  const rows = buildTree(tree, 0, "root", enabledExpSorted, []);
+  rows.forEach(r => tbody.appendChild(r));
+
+  // initial: alle Zeilen sichtbar -> ensure collapsed flags are "false"
+  Array.from(tbody.children).forEach(r => {
+    if (r.dataset && typeof r.dataset.collapsed === "undefined") r.dataset.collapsed = "false";
+    r.hidden = false;
+  });
+
+  // Jetzt Kategoriezellen füllen, sodass nur unterste sichtbare Ebene Zahlen hat
+  updateCategoryCells();
+}
+
+// initial UI bauen
+buildExpansionCheckboxes();
+document.getElementById("search").addEventListener("input", renderTable);
+
+// initial render
+renderTable();
+</script>
+</body>
+</html>
