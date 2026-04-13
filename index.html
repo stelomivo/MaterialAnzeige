@@ -394,7 +394,7 @@ function itemWoodenDisk (args, color) {
   return customItem(args, customArgs);
 }
 
-const noImage = "Bilder/_kein_Bild.png";
+const noImage = "Bilder/0_kein_Bild.png";
 
 const nestedItems = {
   "Figur" : {
@@ -890,7 +890,7 @@ const nestedItems = {
             itemLegendCard({ counts: { DZ: "16*" } }, 3, "Die steinernen Drei"),
           ],
           "Legende („Herz aus Eis“)" : [
-            itemLegendCard({ counts: { HaE: "17*" }, images: { HaE: { src: "Bilder/App/_HaE_Legende_1.png", caption: "Legende 1 – „Wintereinbruch“" } } }, 1, "Wintereinbruch"),
+            itemLegendCard({ counts: { HaE: "17*" }, images: { HaE: { src: "Bilder/App/HaE_Legende_1.png", caption: "Legende 1 – „Wintereinbruch“" } } }, 1, "Wintereinbruch"),
             itemLegendCard({ counts: { HaE: "25*" } }, 2, "Drohende Kälte"),
             itemLegendCard({ counts: { HaE: "16*" } }, 3, "Herz aus Eis"),
           ],
@@ -1898,7 +1898,7 @@ const nestedItems = {
         itemDefault({ name: "Nebelinseln", alt: ["Nord-Spielplan"], counts: { DRidN: 1 }, images: { DRidN: { src: "Bilder/Spielplan/Nebelinseln.jpg", caption: "doppelseitiger Spielplan" } } }),
       ],
       "Andor" : [
-        itemDefault({ name: "Andor", counts: { AJ: 1, BiBo: 1, DLvA: 1, GdK: 1 }, images: { AJ: { src: "Bilder/Spielplan/Rietland.jpg" }, BiBo: { src: "Bilder/Spielplan/Andor.jpg", caption: "doppelseitiger Spielplan" }, DLvA: { src: "Bilder/Spielplan/Andor.jpg", caption: "doppelseitiger Spielplan" }, GdK: { src: "Bilder/App/_Spielplan.png", caption: "Spielplan" } } }),
+        itemDefault({ name: "Andor", counts: { AJ: 1, BiBo: 1, DLvA: 1, GdK: 1 }, images: { AJ: { src: "Bilder/Spielplan/Rietland.jpg" }, BiBo: { src: "Bilder/Spielplan/Andor.jpg", caption: "doppelseitiger Spielplan" }, DLvA: { src: "Bilder/Spielplan/Andor.jpg", caption: "doppelseitiger Spielplan" }, GdK: { src: "Bilder/App/GdK_Spielplan.png", caption: "Spielplan" } } }),
         itemDefault({ name: "Andor (Winter)", counts: { DeK: 1, HaE: 1 }, images: { DeK: { src: "Bilder/Spielplan/Andor_Winter.jpg", caption: "doppelseitiger Spielplan" }, HaE: { src: noImage, caption: "Spielplan" } } }),
       ],
       "Graues Gebirge" : [
@@ -1921,7 +1921,7 @@ const nestedItems = {
         itemDefault({ name: "kleine Ausrüstungstafel", counts: { BB: 1 } }),
       ],
       "große Ausrüstungstafel" : [
-        itemDefault({ name: "Ausrüstungstafel", alt: ["Kampftafel"], counts: { BiBo: 1, DLvA: 1, GdK: 1, HaE: 1 }, images: { BiBo: { src: "Bilder/Ausruestungstafel.jpg" }, DLvA: { src: "Bilder/Ausruestungstafel.jpg" }, GdK: { src: "Bilder/App/_Heldentafel_Haendler.png", caption: "Chada | Händler" }, HaE: { src: noImage } } }),
+        itemDefault({ name: "Ausrüstungstafel", alt: ["Kampftafel"], counts: { BiBo: 1, DLvA: 1, GdK: 1, HaE: 1 }, images: { BiBo: { src: "Bilder/Ausruestungstafel.jpg" }, DLvA: { src: "Bilder/Ausruestungstafel.jpg" }, GdK: { src: "Bilder/App/GdK_Heldentafel_Haendler.png", caption: "Chada | Händler" }, HaE: { src: noImage } } }),
         itemDefault({ name: "Ausrüstungstafel („Das ferne Land“)", alt: ["Kampftafel"], counts: { DfL: 1 }, images: { DfL: { src: noImage, caption: "Ausrüstungstafel" } } }),
         itemDefault({ name: "Ausrüstungstafel „Der Baum der Lieder“", counts: { AdH: 1 } }),
         itemDefault({ name: "Ausrüstungstafel „Der Barde, Grenolin“", counts: { AdH: 1 } }),
@@ -1938,7 +1938,7 @@ const nestedItems = {
         itemHeroBoard({ alt: ["Grent/Grea"], counts: { BM: 1, DfL: 1 }, images: { DfL: { src: "Bilder/Heldentafel_Bergkriegerin.jpg", caption: "Heldentafel „Bergkriegerin“" } } }, "Bergkrieger/Bergkriegerin"),
         itemHeroBoard({ alt: ["Arbon/Talvora"], counts: { BiBo: 1, NH: 1 }, images: { BiBo: { src: noImage }, NH: { src: noImage } } }, "Bewahrer/Bewahrerin"),
         itemHeroBoard({ alt: ["Teyan/Tenaya"], counts: { DfL: 1 }, images: { DfL: { src: "Bilder/Heldentafel_Bezwingerin.jpg", caption: "Heldentafel „Bezwingerin“" } } }, "Bezwinger/Bezwingerin"),
-        itemHeroBoard({ alt: ["Pasco/Chada"], counts: { AJ: 1, BiBo: 1, DlH: 1, DLvA: 1, GdK: 1 }, images: { AJ: { src: "Bilder/Heldentafeln_AJ.png", caption: "Heldentafeln" }, DlH: { src: noImage }, GdK: { src: "Bilder/App/_Heldentafel_Haendler.png", caption: "Chada | Händler" } } }, "Bogenschütze/Bogenschützin"),
+        itemHeroBoard({ alt: ["Pasco/Chada"], counts: { AJ: 1, BiBo: 1, DlH: 1, DLvA: 1, GdK: 1 }, images: { AJ: { src: "Bilder/Heldentafeln_AJ.png", caption: "Heldentafeln" }, DlH: { src: noImage }, GdK: { src: "Bilder/App/GdK_Heldentafel_Haendler.png", caption: "Chada | Händler" } } }, "Bogenschütze/Bogenschützin"),
         itemHeroBoard({ alt: ["Liphardus/Eara"], counts: { BM: 1 }, images: { BM: { src: "Bilder/Heldentafel_Dunkle_Magierin.jpg" } } }, "Dunkler Magier/Dunkle Magierin"),
         itemHeroBoard({ alt: ["Ijsdur/Ijsdora"], counts: { MH: 1 } }, "Eis-Dämon/Eis-Dämonin"),
         itemHeroBoard({ alt: ["Fenn/Fennah"], counts: { BiBo: 1, BMAJ: 1, NH: 1 }, images: { BiBo: { src: "Bilder/Heldentafel_Faehrtenleser_BiBo.png" }, BMAJ: { src: "Bilder/Heldentafel_Faehrtenleserin_AJ.png", caption: "Heldentafel" }, NH: { src: "Bilder/Heldentafel_Faehrtenleser.png" } } }, "Fährtenleser/Fährtenleserin"),
