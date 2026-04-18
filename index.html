@@ -45,6 +45,7 @@ input[type="text"]:focus{
   cursor:pointer;
   color:#4b3f2f;
 }
+.checkbox-inline input[type="button"] { font-family: inherit !important; width: 4.25em; }
 .checkbox-inline input[type="checkbox"] { accent-color:#a57c52; margin-right:6px; }
 
 /* Tabelle */
@@ -100,7 +101,7 @@ tbody tr:nth-child(even) { background:#fbf3e9; }
   box-shadow:0 8px 28px rgba(75,63,47,0.25);
 }
 #overlay-close { position:absolute; top:10px; right:10px; background:none; border:0; font-size:18px; color:#5d4037; cursor:pointer; }
-#overlay img { max-width:100%; height:30vh; max-height:60vw; display:block; margin:8px auto; border-radius:6px; padding:0, .5em; box-sizing:border-box; }
+#overlay img { max-width:100%; height:30vh; max-height:60vw; object-fit:contain; display:block; margin:8px auto; border-radius:6px; padding:0, .5em; box-sizing:border-box; }
 .nav-btn { position:absolute; top:50%; transform:translateY(-50%); background:none; border:0; font-size:24px; cursor:pointer; color:#a57c52; }
 .nav-left { left:12px; } .nav-right { right:12px; }
 #overlay table { width:100%; margin-top:10px; border:1px solid #e5d7b7; border-radius:6px; overflow:hidden; }
@@ -159,7 +160,7 @@ const expansions = [
   { id: "bdr", group: "sonstige Box", code: "BdR", name: "Die Befreiung der Rietburg", year: 2019 },
   { id: "sqdp", group: "sonstige Box", code: "SQDP", name: "Story Quest – Dunkle Pfade", year: 2021 },
   { id: "ve", group: "sonstige Box", code: "VE", name: "Varkurs Erwachen", year: 2022 },
-  { id: "bibo", group: "sonstige Box", code: "BiBo", name: "Big Box", year: 2024 },
+  { id: "bibo", group: "sonstige Box", code: "BiBo", name: "Big Box", year: 2023 },
   { id: "fva", group: "sonstiges Material", code: "FvA", name: "Die Feinde von Andor", year: 2017 },
   { id: "kda", group: "sonstiges Material", code: "KdA", name: "Die Kreaturen des Ava", year: 2023 },
   { id: "tdfl", group: "sonstiges Material", code: "TdfL", name: "Die Trolle des Fernen Landes", year: 2026 },
@@ -1746,7 +1747,7 @@ const nestedItems = {
         itemFogToken({ counts: { DlH: 4, HaE: 1 }, images: { HaE: { src: noImage } } }, "Agren"),
         itemFogToken({ counts: { DlH: 4 } }, "Apfelnüsse"),
         itemFogToken({ counts: { DlH: 2 } }, "Bergskral"),
-        itemFogToken({ counts: { GdK: 1 }, images: { GdK: { src: noImage } } }, "Bogen"),
+        itemFogToken({ counts: { GdK: 1, HaE: 1 }, images: { GdK: { src: noImage }, HaE: { src: noImage } } }, "Bogen"),
         itemFogToken({ counts: { HaE: 2 }, images: { HaE: { src: noImage } } }, "Brennholz"),
         itemFogToken({ counts: { AJ: 6, AJGadS: 6 }, images: { AJGadS: { src: noImage } } }, "Drache"),
         itemFogToken({ counts: { BiBo: 5, DfL: 4, DlH: 3, DLvA: 5 }, images: { DfL: { src: "Bilder/Nebelplaettchen_Ereigniskarte_DfL.png" }, DlH: { src: "Bilder/Nebelplaettchen_Ereigniskarte_DlH.png" } } }, "Ereigniskarte"),
@@ -1776,13 +1777,13 @@ const nestedItems = {
         itemFogToken({ counts: { AJ: 1, AJGadS: 1 }, images: { AJGadS: { src: noImage } } }, "Stundenglas"),
         itemFogToken({ counts: { HaE: 3 }, images: { HaE: { src: noImage } } }, "Sturm"),
         itemFogToken({ counts: { GdK: 1 }, images: { GdK: { src: noImage } } }, "Trank der Stärke"),
-        itemFogToken({ counts: { AoH: 2, BiBo: 1, DfL: 1, DlH: 1, DLvA: 1, GdK: 1 }, images: { AoH: { src: noImage }, DfL: { src: "Bilder/Nebelplaettchen_Trinkschlauch_DfL.png" }, DlH: { src: "Bilder/Nebelplaettchen_Trinkschlauch_DlH.png" }, GdK: { src: noImage } } }, "Trinkschlauch"),
+        itemFogToken({ counts: { AoH: 2, BiBo: 1, DfL: 1, DlH: 1, DLvA: 1, GdK: 1, HaE: 1 }, images: { AoH: { src: noImage }, DfL: { src: "Bilder/Nebelplaettchen_Trinkschlauch_DfL.png" }, DlH: { src: "Bilder/Nebelplaettchen_Trinkschlauch_DlH.png" }, GdK: { src: noImage }, HaE: { src: noImage } } }, "Trinkschlauch"),
         itemFogToken({ counts: { GdK: 2 }, images: { GdK: { src: noImage } } }, "untoter Gor"),
         itemFogToken({ counts: { DlH: 2 } }, "Wargor"),
         itemFogToken({ counts: { AoH: 3, DRidN: 1, GdK: 1 }, images: { AoH: { src: noImage }, GdK: { src: noImage } } }, "Willenspunkte -2"),
         itemFogToken({ counts: { AoH: 1, DlH: 1, DRidN: 3, GdK: 1 }, images: { AoH: { src: noImage }, DlH: { src: "Bilder/Nebelplaettchen_Willenspunkte_-3_DlH.png" }, GdK: { src: noImage } } }, "Willenspunkte -3"),
         itemFogToken({ counts: { GdK: 2 }, images: { GdK: { src: noImage } } }, "Willenspunkte -4"),
-        itemFogToken({ counts: { BiBo: 1, DfL: 2, DlH: 2, DLvA: 1, GdK: 1, HaE: 1 }, images: { DfL: { src: "Bilder/Nebelplaettchen_Willenspunkte_2_DfL.png" }, DlH: { src: "Bilder/Nebelplaettchen_Willenspunkte_2_DlH.png" }, GdK: { src: noImage }, HaE: { src: noImage } } }, "Willenspunkte +2"),
+        itemFogToken({ counts: { BiBo: 1, DfL: 2, DlH: 2, DLvA: 1, GdK: 1, HaE: 2 }, images: { DfL: { src: "Bilder/Nebelplaettchen_Willenspunkte_2_DfL.png" }, DlH: { src: "Bilder/Nebelplaettchen_Willenspunkte_2_DlH.png" }, GdK: { src: noImage }, HaE: { src: noImage } } }, "Willenspunkte +2"),
         itemFogToken({ counts: { BiBo: 1, DlH: 1, DLvA: 1, GdK: 1 }, images: { DlH: { src: "Bilder/Nebelplaettchen_Willenspunkte_3_DlH.png" }, GdK: { src: noImage } } }, "Willenspunkte +3"),
         itemFogToken({ counts: { HaE: 1 }, images: { HaE: { src: noImage } } }, "Winterkraut"),
         itemFogToken({ counts: { DfL: 1 } }, "Wurfmesser"),
@@ -1956,7 +1957,7 @@ const nestedItems = {
         itemHeroBoard({ alt: ["Leander/Leane"], counts: { DH: 1 } }, "Seher/Seherin"),
         itemHeroBoard({ alt: ["Barz/Yaza"], counts: { MH: 1 } }, "Steppennomade/Steppennomadin"),
         itemHeroBoard({ alt: ["Raash/Raashana"], counts: { DfL: 1 }, images: { DfL: { src: "Bilder/Heldentafel_Steppenreiter.jpg", caption: "Heldentafel „Steppenreiter“" } } }, "Steppenreiter/Steppenreiterin"),
-        itemHeroBoard({ alt: ["Aćhan/Aćh"], counts: { MH: 1 }, images: { MH: { src: "Bilder/Heldentafel_Takuri-Hueterin.jpg", caption: "Heldentafel „Takuri-H+terin“" } } }, "Takuri-Hueter/Takuri-Hueterin"),
+        itemHeroBoard({ alt: ["Aćhan/Aćh"], counts: { MH: 1 }, images: { MH: { src: "Bilder/Heldentafel_Takuri-Hueterin.jpg", caption: "Heldentafel „Takuri-Hüterin“" } } }, "Takuri-Hüter/Takuri-Hüterin"),
         itemHeroBoard({ alt: ["Bragor/Rhega"], counts: { BiBo: 1, NH: 1 }, images: { BiBo: { src: noImage }, NH: { src: noImage } } }, "Tarus/Tare"),
         itemHeroBoard({ counts: { BM: 1 } }, "Unbekannter Krieger"),
         itemHeroBoard({ alt: ["Feuerwächter/Feuerwächterin", "Teyan/Tenaya"], counts: { AJGadS: 1, DeK: 1 }, images: { AJGadS: { src: "Bilder/Heldentafel_AJ_Feuerwaechter.png", caption: "Heldentafel" }, DeK: { src: noImage } } }, "Wächter/Wächterin"),
@@ -2111,6 +2112,21 @@ function buildExpansionCheckboxes(){
     label.className = "checkbox-group-name";
     label.textContent = groupName + ":";
     div.appendChild(label);
+
+    const lab = document.createElement("label");
+    lab.className = "checkbox-inline";
+    const cb = document.createElement("input");
+    cb.type = "button";
+    cb.value = "alle aus";
+    cb.addEventListener("click", (e) => {
+      e.currentTarget.value = "alle " + (e.currentTarget.value == "alle ein" ? "aus" : "ein");
+      Array.from(e.currentTarget.parentElement.parentElement.querySelectorAll("input[type=checkbox]")).forEach(input => {
+        input.checked = (e.currentTarget.value == "alle aus");
+      });
+      renderTable();
+    });
+    lab.appendChild(cb);
+    div.appendChild(lab);
 
     groups[groupName].forEach(exp => {
       const lab = document.createElement("label");
